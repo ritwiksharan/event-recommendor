@@ -1,0 +1,12 @@
+[project]
+name = "event-recommendor"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.11"
+dependencies = [
+    "litellm>=1.81.15",
+    "pandas>=2.3.3",
+    "pydantic>=2.12.5",
+    "requests>=2.32.5",
+    "streamlit>=1.54.0",
+]
