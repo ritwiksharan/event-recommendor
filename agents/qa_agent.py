@@ -1,7 +1,7 @@
 import os
 from typing import Optional
 from litellm import completion
-from config import GROQ_MODEL
+from config import CLAUDE_MODEL
 from models.schemas import RecommendationAgentOutput, QAMessage, QARequest, QAResponse
 
 
@@ -37,11 +37,11 @@ def _build_context(recs: RecommendationAgentOutput) -> str:
 
 def run_qa_agent(
     qa: QARequest,
-    groq_api_key: Optional[str] = None,
+    anthropic_api_key: Optional[str] = None,
 ) -> QAResponse:
-    """Agent 4 — answer user questions about recommendations using Groq."""
-    if groq_api_key:
-        os.environ["GROQ_API_KEY"] = groq_api_key
+    """Agent 4 — answer user questions about recommendations using Claude."""
+    if anthropic_api_key:
+        os.environ["ANTHROPIC_API_KEY"] = anthropic_api_key
 
     system_prompt = (
         "You are a helpful event recommendation assistant. "
@@ -58,7 +58,7 @@ def run_qa_agent(
 
     try:
         response = completion(
-            model       = GROQ_MODEL,
+            model       = CLAUDE_MODEL,
             messages    = messages,
             temperature = 0.7,
             max_tokens  = 1000,

@@ -28,7 +28,7 @@ if "chat_history" not in st.session_state:
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.title("🎟️ Event Recommender")
-    st.markdown("Powered by **Ticketmaster**, **Open-Meteo** & **Groq**")
+    st.markdown("Powered by **Ticketmaster**, **Open-Meteo** & **Claude**")
     st.divider()
 
     st.subheader("Search Settings")
@@ -63,15 +63,6 @@ with st.sidebar:
     top_n = st.slider("Recommendations to show", min_value=3, max_value=10, value=6)
 
     st.divider()
-    st.subheader("API Configuration")
-    groq_api_key = st.text_input(
-        "Groq API Key",
-        type="password",
-        placeholder="gsk_...",
-        help="Free key at console.groq.com",
-    )
-
-    st.divider()
     search_btn = st.button("🔍 Find Events", use_container_width=True, type="primary")
 
 # ── Header ─────────────────────────────────────────────────────────────────────
@@ -82,9 +73,6 @@ st.markdown(
 
 # ── Run pipeline ───────────────────────────────────────────────────────────────
 if search_btn:
-    if not groq_api_key:
-        st.error("Please enter your Groq API key in the sidebar to continue.")
-        st.stop()
     if start_date > end_date:
         st.error("Start date must be before end date.")
         st.stop()
@@ -129,10 +117,10 @@ if search_btn:
             st.stop()
 
         # Stage 3: LLM scoring
-        st.write(f"🤖 Scoring {events_out.total_found} events with Groq...")
+        st.write(f"🤖 Scoring {events_out.total_found} events with Claude...")
         recs = run_recommendation_agent(
             request, events_out, weather_out,
-            top_n=top_n, groq_api_key=groq_api_key,
+            top_n=top_n,
         )
         st.write(f"✅ Top **{len(recs.recommendations)}** recommendations ready")
         status.update(label="Done!", state="complete", expanded=False)
@@ -235,23 +223,19 @@ if st.session_state.recommendations:
 
     user_question = st.chat_input("e.g. Which events are best for families?")
     if user_question:
-        if not groq_api_key:
-            st.error("Enter your Groq API key in the sidebar to use the chat.")
-        else:
-            with st.chat_message("user"):
+        with st.chat_message("user"):
                 st.markdown(user_question)
-            with st.chat_message("assistant"):
-                with st.spinner("Thinking..."):
-                    qa_resp = run_qa_agent(
-                        QARequest(
-                            recommendations      = recs,
-                            conversation_history = st.session_state.chat_history,
-                            user_question        = user_question,
-                        ),
-                        groq_api_key=groq_api_key,
-                    )
-                st.markdown(qa_resp.answer)
-            st.session_state.chat_history = qa_resp.updated_history
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking..."):
+                qa_resp = run_qa_agent(
+                    QARequest(
+                        recommendations      = recs,
+                        conversation_history = st.session_state.chat_history,
+                        user_question        = user_question,
+                    ),
+                )
+            st.markdown(qa_resp.answer)
+        st.session_state.chat_history = qa_resp.updated_history
 
 else:
     # Empty state
@@ -260,6 +244,6 @@ else:
     ### How it works
     1. **Agent 1** fetches events from Ticketmaster API
     2. **Agent 2** fetches weather forecasts from Open-Meteo (free, no key needed)
-    3. **Agent 3** uses Groq LLM to score & rank events based on your preferences
+    3. **Agent 3** uses Claude to score & rank events based on your preferences
     4. **Agent 4** answers your follow-up questions via AI chat
     """)

@@ -16,6 +16,7 @@ class UserRequest(BaseModel):
 class EventResult(BaseModel):
     event_id: str
     event_name: str
+    description: str
     date: str
     time: str
     venue_name: str

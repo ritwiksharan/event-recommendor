@@ -44,9 +44,17 @@ def _parse_event(raw: dict) -> EventResult:
     event_time = dates.get("localTime", "TBD")
     image_url  = raw["images"][0]["url"] if raw.get("images") else ""
 
+    description = (
+        raw.get("description", "")
+        or raw.get("info", "")
+        or raw.get("pleaseNote", "")
+        or ""
+    )
+
     return EventResult(
         event_id        = raw.get("id", ""),
         event_name      = raw.get("name", ""),
+        description     = description,
         date            = event_date,
         time            = event_time,
         venue_name      = venue_name,

@@ -2,7 +2,7 @@ import json
 import os
 from typing import Optional
 from litellm import completion
-from config import GROQ_MODEL
+from config import CLAUDE_MODEL
 from models.schemas import (
     UserRequest, EventResult, DailyForecast,
     EventAgentOutput, WeatherAgentOutput,
@@ -20,9 +20,11 @@ def _build_event_summary(event: EventResult, weather: Optional[DailyForecast]) -
         f"rain {weather.precipitation_chance:.0f}%, outdoor_ok={weather.is_suitable_outdoor}"
         if weather else "No forecast"
     )
+    description_str = event.description.strip() if event.description else "No description available"
     return (
         f"ID: {event.event_id}\n"
         f"Name: {event.event_name}\n"
+        f"Description: {description_str}\n"
         f"Date: {event.date} ({'Weekend' if event.is_weekend else 'Weekday'}) @ {event.time}\n"
         f"Venue: {event.venue_name} ({'Outdoor' if event.is_outdoor else 'Indoor'})\n"
         f"Category: {event.category} / {event.genre}\n"
@@ -36,14 +38,14 @@ def run_recommendation_agent(
     events_out: EventAgentOutput,
     weather_out: WeatherAgentOutput,
     top_n: int = 6,
-    groq_api_key: Optional[str] = None,
+    anthropic_api_key: Optional[str] = None,
 ) -> RecommendationAgentOutput:
-    """Agent 3 — use Groq LLM to score and rank events."""
+    """Agent 3 — use Claude LLM to score and rank events."""
     if not events_out.events:
         return RecommendationAgentOutput(request=request, recommendations=[])
 
-    if groq_api_key:
-        os.environ["GROQ_API_KEY"] = groq_api_key
+    if anthropic_api_key:
+        os.environ["ANTHROPIC_API_KEY"] = anthropic_api_key
 
     event_blocks = []
     weather_map: dict[str, Optional[DailyForecast]] = {}
@@ -57,24 +59,29 @@ def run_recommendation_agent(
 
     system_msg = (
         "You are an expert event recommendation engine. "
-        "Score each event 0-100 based on how well it matches the user's preferences. "
-        "Consider: event type, genre, venue type (indoor/outdoor), weather suitability, "
-        "weekend vs weekday, and price. "
+        "Your primary job is to semantically match what the user is looking for against each event's name and description. "
+        "Score each event 0-100 using this priority order:\n"
+        "1. SEMANTIC MATCH (most important): Does the event name/description align with what the user asked for? "
+        "Read the description carefully — an event called 'Jazz Night' with a description about a rock band should score low for a jazz request.\n"
+        "2. PRACTICAL FIT: Does the price fit the budget? Is the venue type (indoor/outdoor) appropriate given the weather?\n"
+        "3. TIMING: Weekend events score slightly higher for leisure requests.\n"
+        "Give a 'reason' that explains specifically how the event description matches or mismatches the user's request. "
         "Respond with ONLY a valid JSON array. No prose, no markdown, no code fences."
     )
     user_msg = (
-        f"User wants: {request.event_description}\n"
+        f"User is looking for: \"{request.event_description}\"\n"
         f"Budget max: {budget_str}\n"
         f"Date range: {request.start_date} to {request.end_date}\n\n"
-        f"Score each of the following {len(events_out.events)} events.\n\n"
+        f"Score each of the following {len(events_out.events)} events based on how well they match what the user described. "
+        f"Pay close attention to the Description field of each event.\n\n"
         f"{events_text}\n\n"
         f"Respond with ONLY this JSON array:\n"
-        f'[{{"event_id": "...", "score": <0-100>, "reason": "..."}}, ...]'
+        f'[{{"event_id": "...", "score": <0-100>, "reason": "one sentence explaining the semantic match"}}, ...]'
     )
 
     try:
         response = completion(
-            model       = GROQ_MODEL,
+            model       = CLAUDE_MODEL,
             messages    = [
                 {"role": "system", "content": system_msg},
                 {"role": "user",   "content": user_msg},
