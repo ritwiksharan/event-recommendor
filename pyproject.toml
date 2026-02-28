@@ -1,7 +1,7 @@
 [project]
-name = "pulsify"
+name = "eventscout"
 version = "0.1.0"
-description = "AI-powered event recommendations matched to your vibe"
+description = "Scout the best events in your city powered by AI"
 requires-python = ">=3.11"
 dependencies = [
     "litellm>=1.81.15",

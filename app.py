@@ -11,8 +11,8 @@ from models.schemas import UserRequest, QAMessage, QARequest
 
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Pulsify",
-    page_icon="🎵",
+    page_title="EventScout",
+    page_icon="🔍",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -27,7 +27,7 @@ if "chat_history" not in st.session_state:
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.title("🎵 Pulsify")
+    st.title("🔍 EventScout")
     st.markdown("Powered by **Ticketmaster**, **Open-Meteo** & **Claude AI**")
     st.divider()
 
@@ -66,7 +66,7 @@ with st.sidebar:
     search_btn = st.button("🔍 Find Events", use_container_width=True, type="primary")
 
 # ── Header ─────────────────────────────────────────────────────────────────────
-st.title("🎵 Pulsify")
+st.title("🔍 EventScout")
 st.markdown(
     "Discover the best events in your city — scored by AI and matched to your vibe."
 )
@@ -164,7 +164,7 @@ if st.session_state.recommendations:
                 if e.image_url:
                     st.image(e.image_url, use_container_width=True)
                 else:
-                    st.markdown("### 🎵")
+                    st.markdown("### 🔍")
 
             with info_col:
                 title_col, score_col = st.columns([3, 1])
