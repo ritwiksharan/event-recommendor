@@ -1,8 +1,11 @@
 import json
 import os
+import re
 from typing import Optional
 from litellm import completion
 from config import CLAUDE_MODEL
+
+LLM_EVENT_LIMIT = 50  # max events sent to the LLM at once
 from models.schemas import (
     UserRequest, EventResult, DailyForecast,
     EventAgentOutput, WeatherAgentOutput,
@@ -47,9 +50,12 @@ def run_recommendation_agent(
     if anthropic_api_key:
         os.environ["ANTHROPIC_API_KEY"] = anthropic_api_key
 
+    # Cap the number of events sent to the LLM to avoid token limit issues
+    candidate_events = events_out.events[:LLM_EVENT_LIMIT]
+
     event_blocks = []
     weather_map: dict[str, Optional[DailyForecast]] = {}
-    for event in events_out.events:
+    for event in candidate_events:
         weather = weather_out.forecasts.get(event.date)
         weather_map[event.event_id] = weather
         event_blocks.append(_build_event_summary(event, weather))
@@ -72,7 +78,7 @@ def run_recommendation_agent(
         f"User is looking for: \"{request.event_description}\"\n"
         f"Budget max: {budget_str}\n"
         f"Date range: {request.start_date} to {request.end_date}\n\n"
-        f"Score each of the following {len(events_out.events)} events based on how well they match what the user described. "
+        f"Score each of the following {len(candidate_events)} events based on how well they match what the user described. "
         f"Pay close attention to the Description field of each event.\n\n"
         f"{events_text}\n\n"
         f"Respond with ONLY this JSON array:\n"
@@ -87,26 +93,29 @@ def run_recommendation_agent(
                 {"role": "user",   "content": user_msg},
             ],
             temperature = 0.2,
-            max_tokens  = 2000,
+            max_tokens  = 8000,
         )
         raw_json    = response.choices[0].message.content.strip()
-        raw_json    = raw_json.strip("```json").strip("```").strip()
+        raw_json    = re.sub(r"^```(?:json)?\s*", "", raw_json)
+        raw_json    = re.sub(r"\s*```$", "", raw_json).strip()
         scores_list = json.loads(raw_json)
 
     except Exception as exc:
-        print(f"[Recommendation Agent] LLM error: {exc}. Returning unscored events.")
+        import traceback
+        traceback.print_exc()
+        print(f"[Recommendation Agent] LLM error: {exc}")
         scored = [
             ScoredEvent(
                 event           = e,
                 weather         = weather_map.get(e.event_id),
                 relevance_score = 50.0,
-                score_reason    = "LLM unavailable",
+                score_reason    = f"Scoring error: {exc}",
             )
-            for e in events_out.events
+            for e in candidate_events
         ]
         return RecommendationAgentOutput(request=request, recommendations=scored[:top_n])
 
-    event_lookup = {e.event_id: e for e in events_out.events}
+    event_lookup = {e.event_id: e for e in candidate_events}
     scores_map   = {item["event_id"]: item for item in scores_list}
 
     scored = []
