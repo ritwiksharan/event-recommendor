@@ -324,7 +324,7 @@ wheels = [
 ]
 
 [[package]]
-name = "event-recommendor"
+name = "eventscout"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
