@@ -110,6 +110,8 @@ def run_events_agent(request: UserRequest) -> EventAgentOutput:
                 break
 
         events = [_parse_event(e) for e in all_raw]
+        if request.budget_max is not None and request.budget_max > 0:
+            events = [e for e in events if e.price_max <= request.budget_max or e.price_max == 0]
         return EventAgentOutput(request=request, events=events, total_found=len(events))
 
     except Exception as exc:
