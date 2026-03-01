@@ -3,9 +3,10 @@ import os
 TICKETMASTER_API_KEY = os.environ.get("TICKETMASTER_API_KEY", "wh6AHfUFqPPnFjBFEYVGA7VX3jWVR1Jx")
 TICKETMASTER_BASE    = "https://app.ticketmaster.com/discovery/v2"
 
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-os.environ["ANTHROPIC_API_KEY"] = ANTHROPIC_API_KEY
-CLAUDE_MODEL      = "claude-haiku-4-5-20251001"
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+os.environ["GEMINI_API_KEY"] = GEMINI_API_KEY
+
+CLAUDE_MODEL = "gemini/gemini-1.5-flash-latest"
 
 OUTDOOR_KEYWORDS = {"stadium", "park", "amphitheater", "field", "grounds", "pavilion"}
 
