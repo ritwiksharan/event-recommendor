@@ -3,10 +3,7 @@ import os
 TICKETMASTER_API_KEY = os.environ.get("TICKETMASTER_API_KEY", "wh6AHfUFqPPnFjBFEYVGA7VX3jWVR1Jx")
 TICKETMASTER_BASE    = "https://app.ticketmaster.com/discovery/v2"
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-os.environ["GEMINI_API_KEY"] = GEMINI_API_KEY
-
-CLAUDE_MODEL = "gemini/gemini-2.5-flash-preview-05-20"
+CLAUDE_MODEL = "vertex_ai/gemini-2.0-flash"
 
 OUTDOOR_KEYWORDS = {"stadium", "park", "amphitheater", "field", "grounds", "pavilion"}
 
