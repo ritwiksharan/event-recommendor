@@ -6,7 +6,7 @@ TICKETMASTER_BASE    = "https://app.ticketmaster.com/discovery/v2"
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 os.environ["GEMINI_API_KEY"] = GEMINI_API_KEY
 
-CLAUDE_MODEL = "gemini/gemini-2.0-flash"
+CLAUDE_MODEL = "gemini/gemini-2.5-flash-preview-05-20"
 
 OUTDOOR_KEYWORDS = {"stadium", "park", "amphitheater", "field", "grounds", "pavilion"}
 
