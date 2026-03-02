@@ -33,31 +33,31 @@ EventScout uses a **4-agent pipeline** to fetch events from Ticketmaster, pull l
 
 ```mermaid
 flowchart TD
-    Browser["🌐 Browser\n(Vanilla HTML/CSS/JS)"]
+    Browser["🌐 Browser"]
 
     subgraph Server["FastAPI — :8000"]
         direction TB
-        Static["StaticFiles\n/static → frontend/"]
-        R1["POST /api/recommend\nRoute"]
-        R2["POST /api/qa\nRoute"]
+        Static["/static → frontend/"]
+        R1["/api/recommend"]
+        R2["/api/qa"]
     end
 
     subgraph Agents["Multi-Agent Pipeline"]
         direction TB
-        A1["🎟️ Agent 1\nEvents Agent"]
-        A2["🌤️ Agent 2\nWeather Agent"]
-        A3["🤖 Agent 3\nRecommendation Agent"]
-        A4["💬 Agent 4\nQA Agent"]
+        A1["🎟️ Events Agent"]
+        A2["🌤️ Weather Agent"]
+        A3["🤖 Recommendation Agent"]
+        A4["💬 QA Agent"]
     end
 
     subgraph External["External Services"]
-        TM["Ticketmaster\nDiscovery API v2"]
-        GEO["Open-Meteo\nGeocoding API"]
-        OM["Open-Meteo\nForecast API"]
-        LLM["LLM\n(Gemini 2.0 Flash\nvia LiteLLM)"]
+        TM["Ticketmaster API"]
+        GEO["Open-Meteo Geocoding"]
+        OM["Open-Meteo Forecast"]
+        LLM["Gemini 2.0 Flash"]
     end
 
-    Browser -- "GET / → index.html" --> Static
+    Browser -- "GET /" --> Static
     Browser -- "POST /api/recommend" --> R1
     Browser -- "POST /api/qa" --> R2
 
@@ -72,8 +72,8 @@ flowchart TD
     A3 <--> LLM
     A4 <--> LLM
 
-    A3 -->|RecommendationAgentOutput| R1
-    A4 -->|QAResponse| R2
+    A3 --> R1
+    A4 --> R2
 ```
 
 ---
@@ -85,45 +85,33 @@ sequenceDiagram
     actor U as Browser
     participant R1 as /api/recommend
     participant R2 as /api/qa
-    participant A1 as 🎟️ Events Agent
-    participant A2 as 🌤️ Weather Agent
-    participant A3 as 🤖 Recommendation Agent
-    participant A4 as 💬 QA Agent
-    participant TM as Ticketmaster
-    participant OM as Open-Meteo
-    participant LLM as LLM (Gemini)
+    participant A1 as Events Agent
+    participant A2 as Weather Agent
+    participant A3 as Recommendation Agent
+    participant A4 as QA Agent
+    participant LLM as Gemini
 
-    Note over A1,A2: Stage 1 — Parallel data fetch (ThreadPoolExecutor, max_workers=2)
-    U->>+R1: POST /api/recommend {UserRequest, top_n}
-    par
-        R1->>+A1: run_events_agent(request)
-        A1->>TM: GET /events.json (paginated, ≤1000 results)
-        TM-->>A1: raw event JSON
-        A1-->>-R1: EventAgentOutput
-    and
-        R1->>+A2: run_weather_agent(request)
-        A2->>OM: GET /geocoding (city → lat/lon)
-        OM-->>A2: coordinates
-        A2->>OM: GET /forecast (daily, 7 days)
-        OM-->>A2: temperature, precipitation, wind, WMO codes
-        A2-->>-R1: WeatherAgentOutput
+    U->>R1: POST /api/recommend
+    par fetch events
+        R1->>A1: run
+        A1-->>R1: events
+    and fetch weather
+        R1->>A2: run
+        A2-->>R1: forecasts
     end
+    R1->>A3: score & rank
+    A3->>LLM: events + prompt
+    LLM-->>A3: scores
+    A3-->>R1: top N results
+    R1-->>U: recommendations
 
-    Note over R1,A3: Stage 2 — LLM scoring (top 50 events)
-    R1->>+A3: run_recommendation_agent(request, events, weather, top_n)
-    A3->>LLM: system prompt + 50 event summaries
-    LLM-->>A3: JSON [{event_id, score, reason}, ...]
-    A3-->>-R1: RecommendationAgentOutput (top_n, sorted by score)
-    R1-->>U: RecommendationAgentOutput
-
-    Note over U,R2: Stage 3 — Conversational Q&A (stateless loop)
-    loop Each follow-up question
-        U->>+R2: POST /api/qa {recommendations, history, question}
-        R2->>+A4: run_qa_agent(request)
-        A4->>LLM: system context + history + question
+    loop Q&A
+        U->>R2: POST /api/qa
+        R2->>A4: run
+        A4->>LLM: question + context
         LLM-->>A4: answer
-        A4-->>-R2: QAResponse
-        R2-->>-U: QAResponse {answer, updated_history}
+        A4-->>R2: answer
+        R2-->>U: answer
     end
 ```
 
@@ -338,11 +326,11 @@ Fetches and parses events from the **Ticketmaster Discovery API v2**.
 
 ```mermaid
 flowchart LR
-    req[UserRequest] --> params["Build query params\ncity · dates · budget · categories"]
-    params --> paginate["Paginate Ticketmaster\nup to 1000 events"]
-    paginate --> parse["Parse JSON\n→ EventResult"]
-    parse --> flags["Compute flags\nis_weekend · is_outdoor"]
-    flags --> sort[Sort by date asc]
+    req[UserRequest] --> params["Build query params"]
+    params --> paginate["Paginate Ticketmaster (≤1000)"]
+    paginate --> parse["Parse → EventResult"]
+    parse --> flags["Compute is_weekend / is_outdoor"]
+    flags --> sort[Sort by date]
     sort --> out[EventAgentOutput]
 ```
 
@@ -365,11 +353,11 @@ Fetches a **daily weather forecast** for each day in the user's date range using
 
 ```mermaid
 flowchart LR
-    city[City name] --> geo["Geocoding API\ncity → lat/lon"]
-    geo --> forecast["Forecast API\n7-day daily data"]
-    forecast --> convert["Convert units\n°C → °F · km/h → mph"]
-    convert --> classify["Classify each day\nis_suitable_outdoor"]
-    classify --> out["WeatherAgentOutput\ndict[date → DailyForecast]"]
+    city[City name] --> geo["Geocode city → lat/lon"]
+    geo --> forecast["Fetch 7-day forecast"]
+    forecast --> convert["Convert units (°C→°F, km/h→mph)"]
+    convert --> classify["Classify is_suitable_outdoor"]
+    classify --> out["WeatherAgentOutput"]
 ```
 
 ---
@@ -400,14 +388,14 @@ The **LLM scoring brain** — ranks events by how well they match the user's req
 
 ```mermaid
 flowchart LR
-    events["EventAgentOutput\n≤1000 events"] --> cap[Cap at 50 events]
-    weather[WeatherAgentOutput] --> join["Join event + weather\nper date"]
+    events[EventAgentOutput] --> cap[Cap at 50 events]
+    weather[WeatherAgentOutput] --> join[Join event + weather]
     cap --> join
-    join --> prompt["Build scored prompt\nvenue_preference + vibe_notes\n4 few-shot examples"]
-    prompt --> llm["LLM call\ntemp=0.2 · max_tokens=8000"]
+    join --> prompt[Build scoring prompt]
+    prompt --> llm[Gemini LLM]
     llm --> parse[Parse JSON scores]
     parse --> sort[Sort by score desc]
-    sort --> topn["Return top N\nRecommendationAgentOutput"]
+    sort --> topn[RecommendationAgentOutput]
 ```
 
 ---
@@ -454,12 +442,12 @@ A **stateless conversational assistant** that answers follow-up questions about 
 
 ```mermaid
 flowchart LR
-    recs["RecommendationAgentOutput\n(all top events)"] --> ctx["Build system context\nname · date · venue · price\nweather · URL · score reason"]
-    hist["Conversation history\n(from browser)"] --> msgs[Assemble messages]
+    recs[RecommendationAgentOutput] --> ctx[Build event context]
+    hist[Conversation history] --> msgs[Assemble messages]
     q[User question] --> msgs
     ctx --> msgs
-    msgs --> llm[LLM call]
-    llm --> out["QAResponse\nanswer + updated_history"]
+    msgs --> llm[Gemini LLM]
+    llm --> out[QAResponse]
 ```
 
 ---
@@ -475,27 +463,27 @@ The frontend is a **vanilla HTML/CSS/JS single-page app** in `frontend/`, served
 ```mermaid
 flowchart TD
     subgraph UI["frontend/ (served at /static)"]
-        HTML["index.html\napp shell + sidebar + main"]
-        CSS["style.css\ndark theme design tokens"]
-        JS["app.js\nsearch · render · chat"]
+        HTML["index.html"]
+        CSS["style.css"]
+        JS["app.js"]
     end
 
     subgraph Sidebar["Sidebar controls"]
         Loc["City / State / Country"]
         Dates["Date range picker"]
-        Chips["Category chips\n14 multiselect options"]
-        Vibe["Vibe & preferences\n(required free-text)"]
-        Budget["Budget slider $0–$500"]
-        TopN["Results slider 3–10"]
+        Chips["Category chips (14)"]
+        Vibe["Vibe & preferences"]
+        Budget["Budget slider"]
+        TopN["Results slider"]
         Btn["Find Events button"]
     end
 
     subgraph Main["Main panel states"]
         Hero["Hero landing page"]
         Loading["Loading spinner"]
-        Stats["Stats bar\n(count · weekend · avg score)"]
-        Cards["Event cards\n(image · badges · meta · score)"]
-        Chat["Chat panel\n(Q&A with AI)"]
+        Stats["Stats bar"]
+        Cards["Event cards"]
+        Chat["Chat panel"]
     end
 
     JS -- reads --> Sidebar
