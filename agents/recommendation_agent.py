@@ -3,7 +3,7 @@ import os
 import re
 from typing import Optional
 from litellm import completion
-from config import CLAUDE_MODEL
+from config import LLM_MODEL
 
 LLM_EVENT_LIMIT = 50  # max events sent to the LLM at once
 from models.schemas import (
@@ -76,7 +76,7 @@ def run_recommendation_agent(
     top_n: int = 6,
     anthropic_api_key: Optional[str] = None,
 ) -> RecommendationAgentOutput:
-    """Agent 3 — use Claude LLM to score and rank events."""
+    """Agent 3 — use Gemini LLM to score and rank events."""
     if not events_out.events:
         return RecommendationAgentOutput(request=request, recommendations=[])
 
@@ -164,7 +164,7 @@ def run_recommendation_agent(
 
     try:
         response = completion(
-            model       = CLAUDE_MODEL,
+            model       = LLM_MODEL,
             messages    = [
                 {"role": "system", "content": system_msg},
                 {"role": "user",   "content": user_msg},

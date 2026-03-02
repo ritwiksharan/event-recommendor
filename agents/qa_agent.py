@@ -2,7 +2,7 @@ import os
 from typing import Optional
 from litellm import completion
 from ddgs import DDGS
-from config import CLAUDE_MODEL
+from config import LLM_MODEL
 from models.schemas import RecommendationAgentOutput, QAMessage, QARequest, QAResponse
 
 
@@ -90,7 +90,7 @@ def run_qa_agent(
     qa: QARequest,
     anthropic_api_key: Optional[str] = None,
 ) -> QAResponse:
-    """Agent 4 — answer user questions about recommendations using Claude + web search."""
+    """Agent 4 — answer user questions about recommendations using Gemini + web search."""
     if anthropic_api_key:
         os.environ["ANTHROPIC_API_KEY"] = anthropic_api_key
 
@@ -156,7 +156,7 @@ def run_qa_agent(
 
     try:
         response = completion(
-            model       = CLAUDE_MODEL,
+            model       = LLM_MODEL,
             messages    = messages,
             temperature = 0.7,
             max_tokens  = 1200,

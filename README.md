@@ -580,22 +580,23 @@ All constants live in `config.py`:
 | Variable | Default | Purpose |
 |---|---|---|
 | `TICKETMASTER_API_KEY` | env var or bundled demo key | Ticketmaster Discovery API key |
-| `CLAUDE_MODEL` | `vertex_ai/gemini-2.0-flash` | LiteLLM model string — swap for any provider |
+| `LLM_MODEL` | `vertex_ai/gemini-2.0-flash` | LiteLLM model string — swap for any provider |
+
 | `OUTDOOR_KEYWORDS` | `stadium`, `park`, `amphitheater`, … | Venue name keywords used to set `is_outdoor` |
 | `WMO_CODES` | 25-entry dict | Human-readable labels for WMO weather codes |
 | `BAD_CODES` | 16-entry set | WMO codes treated as unsuitable for outdoor events |
 
-**Switching LLM providers** — LiteLLM supports any provider by changing `CLAUDE_MODEL` in `config.py`:
+**Switching LLM providers** — LiteLLM supports any provider by changing `LLM_MODEL` in `config.py`:
 
 ```python
 # Google Gemini via Vertex AI (current default)
-CLAUDE_MODEL = "vertex_ai/gemini-2.0-flash"
-
-# Anthropic Claude
-CLAUDE_MODEL = "claude-haiku-4-5-20251001"
+LLM_MODEL = "vertex_ai/gemini-2.0-flash"
 
 # OpenAI
-CLAUDE_MODEL = "gpt-4o-mini"
+LLM_MODEL = "gpt-4o-mini"
+
+# Anthropic
+LLM_MODEL = "claude-haiku-4-5-20251001"
 ```
 
 ---

@@ -153,7 +153,7 @@ if search_btn:
             st.stop()
 
         # Stage 3: LLM scoring
-        st.write(f"🤖 Scoring {events_out.total_found} events with Claude...")
+        st.write(f"🤖 Scoring {events_out.total_found} events with Gemini...")
         recs = run_recommendation_agent(
             request, events_out, weather_out,
             top_n=top_n,
