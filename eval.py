@@ -114,7 +114,7 @@ def run_golden_tests() -> None:
         "Returns at least 1 recommendation":
             lambda r: len(r.recommendations) >= 1,
         "Top result score ≥ 60":
-            lambda r: r.recommendations[0].relevance_score >= 75,
+            lambda r: r.recommendations[0].relevance_score >= 60,
         "Top result is Music category":
             lambda r: r.recommendations[0].event.category == "Music",
         "Top result has a score reason":
