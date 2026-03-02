@@ -412,6 +412,8 @@ A **stateless conversational assistant** that answers follow-up questions about 
 - Maintains conversation history client-side — the full history is sent on every call
 - Strictly scoped prompt with explicit IN SCOPE, OUT OF SCOPE, and ADVERSARIAL categories:
 
+The prompt includes **7 few-shot examples** covering: specific event questions, comparisons, out-of-scope redirects, ticket requests, emotional queries, limited-data handling, and family suitability questions.
+
 **IN SCOPE** — agent answers these:
 
 | Question type | Example |
@@ -430,6 +432,14 @@ A **stateless conversational assistant** that answers follow-up questions about 
 | General knowledge ("Capital of France?") | "I can only help with questions about your recommended events." |
 | Events/artists not in recommendations ("What's on in London?") | same fixed decline |
 | Unrelated requests ("Tell me a joke") | same fixed decline |
+
+**Python Backstop Classifier** — a post-generation safety layer that runs *after* the LLM produces an answer, catching 3 categories the LLM might miss:
+
+| Category | Trigger | Response |
+|---|---|---|
+| Distress detection | Keywords like "suicide", "want to die" | Compassionate redirect + suggest getting out to an event |
+| Off-topic pattern | "capital of", "bitcoin", "recipe for" | Fixed EventScout redirect |
+| Empty/error answer | Answer < 10 characters | Fallback prompt to try again |
 
 **ADVERSARIAL** — hard decline, no partial answer:
 
@@ -529,6 +539,8 @@ pie title 60 Tests by Category
 | **Regression** | 10 | Data integrity — weather dict has correct days, `is_outdoor`/`is_weekend` flags, parallel execution, QA history grows |
 | **MaaJ Golden** | 10 | LLM-judged QA answers graded 1–5 against a known correct answer (model-as-a-judge) |
 | **MaaJ Rubric** | 10 | LLM-judged QA quality graded against a rubric — empathy, completeness, accuracy, helpfulness |
+
+**Latest results: 60/60 tests passing** (see `eval_results.txt`)
 
 **Run:**
 
