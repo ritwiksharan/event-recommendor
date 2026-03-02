@@ -2,7 +2,7 @@ import os
 import re
 from typing import Optional
 from litellm import completion
-from config import CLAUDE_MODEL
+from config import LLM_MODEL
 from models.schemas import RecommendationAgentOutput, QAMessage, QARequest, QAResponse
 
 
@@ -162,7 +162,7 @@ def run_qa_agent(
 
     try:
         response = completion(
-            model       = CLAUDE_MODEL,
+            model       = LLM_MODEL,
             messages    = messages,
             temperature = 0.7,
             max_tokens  = 1000,

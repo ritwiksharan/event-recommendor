@@ -71,6 +71,7 @@ class ScoredEvent(BaseModel):
 class RecommendationAgentOutput(BaseModel):
     request: UserRequest
     recommendations: list[ScoredEvent] = []
+    formatted_output: Optional[str] = None
 
 
 class QAMessage(BaseModel):

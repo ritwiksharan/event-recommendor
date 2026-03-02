@@ -709,7 +709,7 @@ def run_regression_tests() -> None:
 def llm_judge(question: str, actual: str, expected: str = "", rubric: str = "") -> dict:
     """Call Gemini as a judge to evaluate an answer. Returns score 1-5 and reason."""
     from litellm import completion
-    from config import CLAUDE_MODEL
+    from config import LLM_MODEL
 
     if expected:
         prompt = f"""You are an impartial judge evaluating a chatbot answer.
@@ -745,7 +745,7 @@ Respond ONLY as JSON: {{"score": <1-5>, "reason": "one sentence"}}"""
 
     try:
         resp = completion(
-            model=CLAUDE_MODEL,
+            model=LLM_MODEL,
             messages=[{"role": "user", "content": prompt}],
             max_tokens=200,
             temperature=0.0,

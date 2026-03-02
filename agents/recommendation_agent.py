@@ -3,7 +3,7 @@ import os
 import re
 from typing import Optional
 from litellm import completion
-from config import CLAUDE_MODEL
+from config import LLM_MODEL
 
 LLM_EVENT_LIMIT = 50  # max events sent to the LLM at once
 from models.schemas import (
@@ -118,7 +118,7 @@ def run_recommendation_agent(
 
     try:
         response = completion(
-            model       = CLAUDE_MODEL,
+            model       = LLM_MODEL,
             messages    = [
                 {"role": "system", "content": system_msg},
                 {"role": "user",   "content": user_msg},
