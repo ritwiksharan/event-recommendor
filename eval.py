@@ -891,7 +891,7 @@ def run_maaj_rubric_tests() -> None:
         {
             "id": "MR-5",
             "question": "I only have 2 hours free on Saturday evening, which event fits?",
-            "rubric": "Answer should identify Saturday events from the recommendations and suggest one, even if exact duration is unknown. Should not refuse or crash.",
+            "rubric": "Answer should check for Saturday events and give a helpful response. If no Saturday events exist, it should honestly say so and suggest the closest alternative. Should not refuse or give an empty response.",
         },
         {
             "id": "MR-6",
