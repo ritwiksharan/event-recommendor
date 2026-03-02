@@ -1,8 +1,8 @@
-# EventScout 🎭
+# EventScout
 
-> AI-powered event discovery — find the best events in your city, scored by an LLM and matched with live weather forecasts.
+> AI-powered event discovery — find the best events in your city, scored by a language model and matched with live weather forecasts.
 
-EventScout uses a **4-agent pipeline** to fetch events from Ticketmaster, pull live weather forecasts, rank everything with a language model, and answer follow-up questions in a conversational chat interface.
+EventScout uses a **4-agent pipeline** to fetch events from Ticketmaster, pull live weather forecasts, rank everything with an LLM, and answer follow-up questions through a built-in chat interface. The entire app — API and frontend — is served from a single **FastAPI** server.
 
 ---
 
@@ -13,11 +13,13 @@ EventScout uses a **4-agent pipeline** to fetch events from Ticketmaster, pull l
   - [Request & Data Flow](#request--data-flow)
   - [Data Model](#data-model)
 - [Project Structure](#project-structure)
+- [API Reference](#api-reference)
 - [Agents](#agents)
   - [Agent 1 — Events](#agent-1--events-agent)
   - [Agent 2 — Weather](#agent-2--weather-agent)
   - [Agent 3 — Recommendation](#agent-3--recommendation-agent)
   - [Agent 4 — QA](#agent-4--qa-agent)
+- [Frontend](#frontend)
 - [Evaluation Suite](#evaluation-suite)
 - [Quickstart](#quickstart)
 - [Configuration](#configuration)
@@ -31,19 +33,21 @@ EventScout uses a **4-agent pipeline** to fetch events from Ticketmaster, pull l
 
 ```mermaid
 flowchart TD
-    User["👤 User\n(Streamlit UI)"]
+    Browser["🌐 Browser\n(Vanilla HTML/CSS/JS)"]
 
-    subgraph Pipeline["Multi-Agent Pipeline"]
+    subgraph Server["FastAPI — :8000"]
+        direction TB
+        Static["StaticFiles\n/static → frontend/"]
+        R1["POST /api/recommend\nRoute"]
+        R2["POST /api/qa\nRoute"]
+    end
+
+    subgraph Agents["Multi-Agent Pipeline"]
         direction TB
         A1["🎟️ Agent 1\nEvents Agent"]
         A2["🌤️ Agent 2\nWeather Agent"]
         A3["🤖 Agent 3\nRecommendation Agent"]
         A4["💬 Agent 4\nQA Agent"]
-
-        A1 & A2 -->|parallel fetch| A3
-        A3 -->|top-N ranked events| User
-        User -->|follow-up question| A4
-        A4 -->|contextual answer| User
     end
 
     subgraph External["External Services"]
@@ -53,13 +57,23 @@ flowchart TD
         LLM["LLM\n(Gemini 2.0 Flash\nvia LiteLLM)"]
     end
 
-    User -->|search request| A1
-    User -->|search request| A2
-    A1 <-->|paginated events| TM
-    A2 <-->|city → lat/lon| GEO
-    A2 <-->|7-day forecast| OM
-    A3 <-->|score & rank| LLM
-    A4 <-->|contextual chat| LLM
+    Browser -- "GET / → index.html" --> Static
+    Browser -- "POST /api/recommend" --> R1
+    Browser -- "POST /api/qa" --> R2
+
+    R1 -->|parallel| A1
+    R1 -->|parallel| A2
+    A1 & A2 --> A3
+    R2 --> A4
+
+    A1 <--> TM
+    A2 <--> GEO
+    A2 <--> OM
+    A3 <--> LLM
+    A4 <--> LLM
+
+    A3 -->|RecommendationAgentOutput| R1
+    A4 -->|QAResponse| R2
 ```
 
 ---
@@ -68,7 +82,9 @@ flowchart TD
 
 ```mermaid
 sequenceDiagram
-    actor U as User
+    actor U as Browser
+    participant R1 as /api/recommend
+    participant R2 as /api/qa
     participant A1 as 🎟️ Events Agent
     participant A2 as 🌤️ Weather Agent
     participant A3 as 🤖 Recommendation Agent
@@ -77,33 +93,37 @@ sequenceDiagram
     participant OM as Open-Meteo
     participant LLM as LLM (Gemini)
 
-    Note over A1,A2: Stage 1 — Parallel data fetch (ThreadPoolExecutor)
+    Note over A1,A2: Stage 1 — Parallel data fetch (ThreadPoolExecutor, max_workers=2)
+    U->>+R1: POST /api/recommend {UserRequest, top_n}
     par
-        U->>+A1: UserRequest
+        R1->>+A1: run_events_agent(request)
         A1->>TM: GET /events.json (paginated, ≤1000 results)
         TM-->>A1: raw event JSON
-        A1-->>-U: EventAgentOutput
+        A1-->>-R1: EventAgentOutput
     and
-        U->>+A2: UserRequest
+        R1->>+A2: run_weather_agent(request)
         A2->>OM: GET /geocoding (city → lat/lon)
         OM-->>A2: coordinates
         A2->>OM: GET /forecast (daily, 7 days)
         OM-->>A2: temperature, precipitation, wind, WMO codes
-        A2-->>-U: WeatherAgentOutput
+        A2-->>-R1: WeatherAgentOutput
     end
 
-    Note over U,A3: Stage 2 — LLM scoring (top 50 events)
-    U->>+A3: EventAgentOutput + WeatherAgentOutput
-    A3->>LLM: System prompt with examples + 50 event summaries
-    LLM-->>A3: JSON array [{event_id, score, reason}, ...]
-    A3-->>-U: RecommendationAgentOutput (top N, sorted by score)
+    Note over R1,A3: Stage 2 — LLM scoring (top 50 events)
+    R1->>+A3: run_recommendation_agent(request, events, weather, top_n)
+    A3->>LLM: system prompt + 50 event summaries
+    LLM-->>A3: JSON [{event_id, score, reason}, ...]
+    A3-->>-R1: RecommendationAgentOutput (top_n, sorted by score)
+    R1-->>U: RecommendationAgentOutput
 
-    Note over U,A4: Stage 3 — Conversational Q&A (stateless loop)
+    Note over U,R2: Stage 3 — Conversational Q&A (stateless loop)
     loop Each follow-up question
-        U->>+A4: question + full conversation history
+        U->>+R2: POST /api/qa {recommendations, history, question}
+        R2->>+A4: run_qa_agent(request)
         A4->>LLM: system context + history + question
         LLM-->>A4: answer
-        A4-->>-U: QAResponse (answer + updated history)
+        A4-->>-R2: QAResponse
+        R2-->>-U: QAResponse {answer, updated_history}
     end
 ```
 
@@ -122,7 +142,10 @@ classDiagram
         +date start_date
         +date end_date
         +str event_description
+        +str venue_preference
+        +str vibe_notes
         +Optional~float~ budget_max
+        +list~str~ selected_categories
     }
 
     class EventResult {
@@ -133,10 +156,12 @@ classDiagram
         +str time
         +str venue_name
         +str venue_address
+        +str venue_city
+        +str venue_state
         +float venue_latitude
         +float venue_longitude
-        +Optional~float~ price_min
-        +Optional~float~ price_max
+        +float price_min
+        +float price_max
         +str category
         +str genre
         +str url
@@ -178,6 +203,7 @@ classDiagram
     class RecommendationAgentOutput {
         +UserRequest request
         +list~ScoredEvent~ recommendations
+        +Optional~str~ formatted_output
     }
 
     class QAMessage {
@@ -197,7 +223,6 @@ classDiagram
     }
 
     UserRequest "1" --o "1" EventAgentOutput
-    UserRequest "1" --o "1" WeatherAgentOutput
     UserRequest "1" --o "1" RecommendationAgentOutput
     EventResult "many" --o "1" EventAgentOutput
     EventResult "1" --o "1" ScoredEvent
@@ -216,10 +241,11 @@ classDiagram
 ```
 event-recommendor/
 │
-├── app.py                       # Streamlit UI — search form, results cards, chat
-├── config.py                    # API keys, LLM model string, weather constants
-├── eval.py                      # 60-test evaluation suite
-├── pyproject.toml               # Python project metadata + deps (uv)
+├── api/
+│   ├── main.py                  # FastAPI app — mounts routes + serves frontend
+│   └── routes/
+│       ├── recommend.py         # POST /api/recommend — runs agents 1–3
+│       └── qa.py                # POST /api/qa — runs agent 4
 │
 ├── agents/
 │   ├── events_agent.py          # Agent 1 — Ticketmaster fetcher & parser
@@ -227,9 +253,70 @@ event-recommendor/
 │   ├── recommendation_agent.py  # Agent 3 — LLM scoring & ranking
 │   └── qa_agent.py              # Agent 4 — stateless LLM chat assistant
 │
-└── models/
-    └── schemas.py               # Pydantic v2 models shared by all agents
+├── frontend/
+│   ├── index.html               # Single-page app shell
+│   ├── style.css                # Dark premium theme (design tokens)
+│   └── app.js                   # Search, result rendering, chat logic
+│
+├── models/
+│   └── schemas.py               # Pydantic v2 models shared across all layers
+│
+├── config.py                    # API keys, LLM model string, weather constants
+├── eval.py                      # 60-test evaluation suite
+└── pyproject.toml               # Python project metadata + deps (uv)
 ```
+
+---
+
+## API Reference
+
+Both endpoints are served by the FastAPI app at `:8000`. The frontend calls them directly — no separate proxy needed.
+
+### `POST /api/recommend`
+
+Runs agents 1–3: fetches events and weather in parallel, then scores and ranks with the LLM.
+
+**Query param:** `top_n` (int, default `6`) — number of results to return.
+
+**Request body:** `UserRequest`
+
+```json
+{
+  "city": "New York",
+  "state_code": "NY",
+  "country_code": "US",
+  "start_date": "2026-03-07",
+  "end_date": "2026-03-14",
+  "event_description": "Concerts & Live Music, Jazz & Blues. date night, chill vibes",
+  "venue_preference": "No preference",
+  "vibe_notes": "date night, chill vibes",
+  "budget_max": 120,
+  "selected_categories": ["🎵 Concerts & Live Music", "🎷 Jazz & Blues"]
+}
+```
+
+**Response body:** `RecommendationAgentOutput`
+
+---
+
+### `POST /api/qa`
+
+Runs agent 4: answers a follow-up question about the recommendations.
+
+**Request body:** `QARequest`
+
+```json
+{
+  "recommendations": { "...RecommendationAgentOutput..." },
+  "conversation_history": [
+    { "role": "user", "content": "Which event has the best price?" },
+    { "role": "assistant", "content": "Event #3 at $35 is the best value..." }
+  ],
+  "user_question": "How do I get there?"
+}
+```
+
+**Response body:** `QAResponse`
 
 ---
 
@@ -242,7 +329,7 @@ event-recommendor/
 Fetches and parses events from the **Ticketmaster Discovery API v2**.
 
 - Paginates through results up to **1,000 events** per search
-- Filters by city, state/country, date range, and optional budget cap
+- Filters by city, state/country, date range, optional budget cap, and `selected_categories` (mapped to Ticketmaster `classificationName`)
 - Parses raw JSON into typed `EventResult` objects
 - Computes two boolean flags on every event:
   - `is_weekend` — `True` if the event falls on Friday, Saturday, or Sunday
@@ -251,9 +338,9 @@ Fetches and parses events from the **Ticketmaster Discovery API v2**.
 
 ```mermaid
 flowchart LR
-    req[UserRequest] --> params[Build query params\ncity · dates · budget]
-    params --> paginate[Paginate Ticketmaster\nup to 1000 events]
-    paginate --> parse[Parse JSON\n→ EventResult]
+    req[UserRequest] --> params["Build query params\ncity · dates · budget · categories"]
+    params --> paginate["Paginate Ticketmaster\nup to 1000 events"]
+    paginate --> parse["Parse JSON\n→ EventResult"]
     parse --> flags["Compute flags\nis_weekend · is_outdoor"]
     flags --> sort[Sort by date asc]
     sort --> out[EventAgentOutput]
@@ -272,9 +359,18 @@ Fetches a **daily weather forecast** for each day in the user's date range using
 - Converts units — Celsius → Fahrenheit, km/h → mph
 - Marks each day `is_suitable_outdoor = True` only when **all three** conditions hold:
   - WMO code is not in the bad-weather set (rain, snow, fog, thunderstorm, etc.)
-  - Precipitation chance < 50 %
+  - Precipitation chance < 50%
   - Wind speed < 25 mph
 - Returns a `dict[date_str → DailyForecast]` for O(1) lookup by the recommendation agent
+
+```mermaid
+flowchart LR
+    city[City name] --> geo["Geocoding API\ncity → lat/lon"]
+    geo --> forecast["Forecast API\n7-day daily data"]
+    forecast --> convert["Convert units\n°C → °F · km/h → mph"]
+    convert --> classify["Classify each day\nis_suitable_outdoor"]
+    classify --> out["WeatherAgentOutput\ndict[date → DailyForecast]"]
+```
 
 ---
 
@@ -286,31 +382,32 @@ The **LLM scoring brain** — ranks events by how well they match the user's req
 
 - Caps input at **50 events** to stay within token limits
 - Joins each event with its weather forecast for that day
-- Sends a structured prompt to the LLM asking for a score (0–100) and a one-sentence reason per event
+- Sends a structured prompt (with `venue_preference` and `vibe_notes` explicitly separated) to the LLM asking for a score (0–100) and a one-sentence reason per event
 - The system prompt uses **5 few-shot examples** to guide scoring:
 
 | Example | User wants | Event | Score |
 |---|---|---|---|
-| Perfect match | Jazz, indoor, weekend | Birdland Jazz Night — Indoor, Friday | 92 |
-| Wrong category | Jazz, indoor, weekend | Yankees vs Red Sox — Outdoor, Saturday | 8 |
-| Partial match | Jazz, indoor, weekend | Classical Piano Recital — Indoor, Saturday | 45 |
+| Perfect match | Jazz, date night | Birdland Jazz Night — Indoor, Friday | 92 |
+| Good match, minor venue mismatch | Live rock, outdoor vibe | Beauty School Dropout — Indoor, Saturday | 82 |
+| Wrong category | Jazz, casual | Yankees vs Red Sox — Outdoor, Saturday | 8 |
+| Outdoor + bad weather | Outdoor festival | Summer Music Festival — Heavy rain | 62 |
 | Budget mismatch | Live music, $30 max | Coldplay World Tour — $150–$300 | 20 |
-| Weather penalty | Outdoor festival | Summer Music Festival — Heavy rain | 30 |
 
-- Parses the returned JSON array, strips any markdown fences
-- Falls back to score = 50 for any event the LLM didn't score (escape hatch)
+- **Venue type is a minor factor** — capped at −5 points maximum; a highly relevant indoor event still scores 80+ even if the user mentioned outdoor vibes
+- Robust JSON parsing via `_parse_scores_json()`: strips markdown fences, extracts the `[…]` array from any surrounding prose, removes trailing commas (common Gemini output), and gracefully handles truncated responses
+- Falls back to score = 0 for any event the LLM didn't score (no artificial 50 defaults)
 - Sorts by score descending, returns the top N
 
 ```mermaid
 flowchart LR
-    events[EventAgentOutput\n≤1000 events] --> cap[Cap at 50 events]
-    weather[WeatherAgentOutput] --> join[Join event + weather\nper date]
+    events["EventAgentOutput\n≤1000 events"] --> cap[Cap at 50 events]
+    weather[WeatherAgentOutput] --> join["Join event + weather\nper date"]
     cap --> join
-    join --> prompt[Build scored prompt\nwith 5 few-shot examples]
-    prompt --> llm[LLM call\ntemp=0.2 · max_tokens=8000]
+    join --> prompt["Build scored prompt\nvenue_preference + vibe_notes\n4 few-shot examples"]
+    prompt --> llm["LLM call\ntemp=0.2 · max_tokens=8000"]
     llm --> parse[Parse JSON scores]
     parse --> sort[Sort by score desc]
-    sort --> topn[Return top N\nRecommendationAgentOutput]
+    sort --> topn["Return top N\nRecommendationAgentOutput"]
 ```
 
 ---
@@ -322,7 +419,8 @@ flowchart LR
 A **stateless conversational assistant** that answers follow-up questions about the recommendations.
 
 - Builds a rich system context from all top recommendations (name, date, venue, price, weather, ticket URL, score reason)
-- The system prompt includes **5 worked examples** to steer answer style:
+- Maintains conversation history client-side — the full history is sent on every call
+- Uses 5 worked examples in the system prompt to steer answer style:
 
 | Scenario | Behaviour |
 |---|---|
@@ -333,7 +431,70 @@ A **stateless conversational assistant** that answers follow-up questions about 
 | Emotional query ("I feel lonely tonight") | Shows empathy, suggests a relevant event |
 
 - **Escape hatch:** if the data doesn't contain the answer, says so — never fabricates prices, times, or venue details
-- **Stateless design:** full context + history sent on every call; the caller (UI) owns the history
+- **Stateless design:** the browser owns and sends the full history on each request; the server is side-effect-free
+
+```mermaid
+flowchart LR
+    recs["RecommendationAgentOutput\n(all top events)"] --> ctx["Build system context\nname · date · venue · price\nweather · URL · score reason"]
+    hist["Conversation history\n(from browser)"] --> msgs[Assemble messages]
+    q[User question] --> msgs
+    ctx --> msgs
+    msgs --> llm[LLM call]
+    llm --> out["QAResponse\nanswer + updated_history"]
+```
+
+---
+
+## Frontend
+
+The frontend is a **vanilla HTML/CSS/JS single-page app** in `frontend/`, served as static files by FastAPI at `/static`. No build step or JavaScript framework is required.
+
+**Key frontend features:**
+- **Markdown rendering** — assistant chat responses are parsed with [marked.js](https://marked.js.org/) and rendered as formatted HTML (numbered lists, bold text, headings, code). User messages remain plain text.
+- **Session persistence** — search results and the full conversation history are saved to `localStorage` as JSON after every search and every chat exchange. On page reload the previous session (event cards + chat) is automatically restored.
+
+```mermaid
+flowchart TD
+    subgraph UI["frontend/ (served at /static)"]
+        HTML["index.html\napp shell + sidebar + main"]
+        CSS["style.css\ndark theme design tokens"]
+        JS["app.js\nsearch · render · chat"]
+    end
+
+    subgraph Sidebar["Sidebar controls"]
+        Loc["City / State / Country"]
+        Dates["Date range picker"]
+        Chips["Category chips\n14 multiselect options"]
+        Vibe["Vibe & preferences\n(required free-text)"]
+        Budget["Budget slider $0–$500"]
+        TopN["Results slider 3–10"]
+        Btn["Find Events button"]
+    end
+
+    subgraph Main["Main panel states"]
+        Hero["Hero landing page"]
+        Loading["Loading spinner"]
+        Stats["Stats bar\n(count · weekend · avg score)"]
+        Cards["Event cards\n(image · badges · meta · score)"]
+        Chat["Chat panel\n(Q&A with AI)"]
+    end
+
+    JS -- reads --> Sidebar
+    JS -- "POST /api/recommend" --> API1[FastAPI]
+    JS -- "POST /api/qa" --> API2[FastAPI]
+    API1 --> Stats & Cards
+    API2 --> Chat
+```
+
+**Category chips (multiselect, 14 options):**
+
+| | | |
+|---|---|---|
+| 🎵 Concerts & Live Music | 🏀 Sports | 🎭 Theater & Broadway |
+| 😂 Comedy | 🎨 Arts & Exhibitions | 👨‍👩‍👧 Family & Kids |
+| 🎉 Festivals & Fairs | 🍷 Food & Drink | 🎤 Hip-Hop & R&B |
+| 🎸 Rock & Alternative | 🎷 Jazz & Blues | 💃 Dance & EDM |
+| 🏛️ Cultural & Community | 🌿 Outdoor & Adventure | |
 
 ---
 
@@ -366,8 +527,6 @@ pie title 60 Tests by Category
 source .env && uv run python eval.py
 ```
 
-Prints per-test pass/fail and a summary count per category.
-
 ---
 
 ## Quickstart
@@ -378,8 +537,8 @@ Prints per-test pass/fail and a summary count per category.
 |---|---|
 | Python 3.11+ | Pinned via `.python-version` |
 | [uv](https://docs.astral.sh/uv/) | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
-| Anthropic API key | [console.anthropic.com](https://console.anthropic.com) |
-| Ticketmaster API key | [developer.ticketmaster.com](https://developer.ticketmaster.com) — free tier available |
+| Vertex AI credentials | For the default `vertex_ai/gemini-2.0-flash` model — set `GOOGLE_APPLICATION_CREDENTIALS` |
+| Ticketmaster API key | Free tier at [developer.ticketmaster.com](https://developer.ticketmaster.com) — a demo key is bundled in `config.py` |
 
 ### Install & Run
 
@@ -388,17 +547,29 @@ Prints per-test pass/fail and a summary count per category.
 git clone https://github.com/ritwiksharan/event-recommendor.git
 cd event-recommendor
 
-# 2. Install dependencies
+# 2. Checkout the FastAPI branch
+git checkout fastapi-backend
+
+# 3. Install dependencies
 uv sync
 
-# 3. Set environment variables
-export ANTHROPIC_API_KEY="sk-ant-..."
-export TICKETMASTER_API_KEY="your-key"   # optional — a demo key is bundled in config.py
+# 4. Set environment variables
+export TICKETMASTER_API_KEY="your-key"          # optional — demo key bundled in config.py
 
-# 4. Start the app
-uv run streamlit run app.py
-# → http://localhost:8501
+# For Vertex AI (current default LLM):
+export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account.json"
+
+# Or swap to Anthropic by editing config.py and setting:
+export ANTHROPIC_API_KEY="sk-ant-..."
+
+# 5. Start the server
+uv run uvicorn api.main:app --reload --port 8000
+
+# 6. Open the app
+open http://localhost:8000
 ```
+
+The FastAPI server serves both the REST API and the static frontend from a single port — no separate dev server is needed.
 
 ---
 
@@ -414,7 +585,7 @@ All constants live in `config.py`:
 | `WMO_CODES` | 25-entry dict | Human-readable labels for WMO weather codes |
 | `BAD_CODES` | 16-entry set | WMO codes treated as unsuitable for outdoor events |
 
-**Switching models** — LiteLLM supports any provider by changing `CLAUDE_MODEL`:
+**Switching LLM providers** — LiteLLM supports any provider by changing `CLAUDE_MODEL` in `config.py`:
 
 ```python
 # Google Gemini via Vertex AI (current default)
@@ -433,7 +604,8 @@ CLAUDE_MODEL = "gpt-4o-mini"
 
 | Layer | Technology |
 |---|---|
-| UI | [Streamlit](https://streamlit.io) |
+| Web framework | [FastAPI](https://fastapi.tiangolo.com) + [uvicorn](https://www.uvicorn.org) |
+| Frontend | Vanilla HTML/CSS/JS (no framework, no build step) |
 | LLM gateway | [LiteLLM](https://github.com/BerriAI/litellm) — provider-agnostic |
 | Default LLM | Gemini 2.0 Flash via Vertex AI |
 | Events data | [Ticketmaster Discovery API v2](https://developer.ticketmaster.com/products-and-docs/apis/discovery-api/v2/) |
