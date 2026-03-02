@@ -365,6 +365,22 @@ input[type="range"]::-webkit-slider-thumb {
   border-bottom-left-radius: 3px;
 }
 
+/* Markdown rendered inside assistant bubbles */
+.msg-assistant p { margin: 0 0 0.5rem; }
+.msg-assistant p:last-child { margin-bottom: 0; }
+.msg-assistant ol, .msg-assistant ul { margin: 0.3rem 0 0.5rem 1.2rem; padding: 0; }
+.msg-assistant li { margin-bottom: 0.25rem; }
+.msg-assistant strong { font-weight: 700; color: var(--text); }
+.msg-assistant em { font-style: italic; }
+.msg-assistant h1, .msg-assistant h2, .msg-assistant h3 {
+  font-size: 1rem; font-weight: 700; margin: 0.5rem 0 0.25rem;
+}
+.msg-assistant code {
+  background: rgba(0,0,0,0.25); border-radius: 4px;
+  padding: 0.1em 0.35em; font-size: 0.82em;
+}
+.msg-assistant hr { border: none; border-top: 1px solid var(--border); margin: 0.5rem 0; }
+
 .chat-input-row { display: flex; gap: 0.6rem; }
 #chat-input {
   flex: 1;

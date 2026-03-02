@@ -10,7 +10,47 @@ const CATEGORIES = [
 
 let selectedCats = new Set(["🎵 Concerts & Live Music", "🏀 Sports"]);
 let recommendations = null;   // last API response
-let chatHistory = [];      // [{role, content}, …]
+let chatHistory = [];         // [{role, content}, …]
+let lastSearchMeta = null;    // {city, start, end} for session restore
+
+const SESSION_KEY = "eventscout_session";
+
+/* ── Session persistence ──────────────────────────────────────────────── */
+function saveSession() {
+    if (!recommendations || !lastSearchMeta) return;
+    try {
+        localStorage.setItem(SESSION_KEY, JSON.stringify({
+            recommendations,
+            chatHistory,
+            meta: lastSearchMeta,
+            savedAt: new Date().toISOString(),
+        }));
+    } catch (e) {
+        console.warn("Could not save session:", e);
+    }
+}
+
+function loadSession() {
+    try {
+        const raw = localStorage.getItem(SESSION_KEY);
+        if (!raw) return;
+        const { recommendations: recs, chatHistory: hist, meta } = JSON.parse(raw);
+        if (!recs || !meta) return;
+
+        recommendations = recs;
+        chatHistory = hist || [];
+        lastSearchMeta = meta;
+
+        // Render cards (this also clears chat-messages)
+        renderResults(recs, meta.city, meta.start, meta.end);
+
+        // Re-populate chat from saved history
+        chatHistory.forEach(msg => appendMsg(msg.role, msg.content));
+    } catch (e) {
+        console.warn("Could not restore session:", e);
+        localStorage.removeItem(SESSION_KEY);
+    }
+}
 
 /* ── Init ─────────────────────────────────────────────────────────────── */
 (function init() {
@@ -46,6 +86,8 @@ let chatHistory = [];      // [{role, content}, …]
     topnSlider.addEventListener("input", () => {
         topnDisplay.textContent = topnSlider.value;
     });
+
+    loadSession();
 })();
 
 /* ── Search ───────────────────────────────────────────────────────────── */
@@ -100,8 +142,10 @@ async function search() {
         setLoading(true, "Ranking by your vibe…");
         recommendations = await res.json();
         chatHistory = [];
+        lastSearchMeta = { city, start, end };
 
         renderResults(recommendations, city, start, end);
+        saveSession();
     } catch (e) {
         showError(e.message);
         setLoading(false);
@@ -226,6 +270,7 @@ async function sendChat() {
 
         appendMsg("assistant", data.answer);
         chatHistory = data.updated_history;
+        saveSession();
     } catch (e) {
         appendMsg("assistant", `Sorry, something went wrong: ${e.message}`);
     } finally {
@@ -238,7 +283,11 @@ function appendMsg(role, text) {
     const box = document.getElementById("chat-messages");
     const div = document.createElement("div");
     div.className = `msg msg-${role}`;
-    div.textContent = text;
+    if (role === "assistant" && typeof marked !== "undefined") {
+        div.innerHTML = marked.parse(text);
+    } else {
+        div.textContent = text;
+    }
     box.appendChild(div);
     box.scrollTop = box.scrollHeight;
 }

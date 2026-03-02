@@ -12,7 +12,17 @@ from models.schemas import (
     ScoredEvent, RecommendationAgentOutput,
 )
 
-
+def _format_markdown(scored: list[ScoredEvent]) -> str:
+    """Generate a markdown summary of recommendations."""
+    lines = ["# Recommendations", ""]
+    for s in scored:
+        ev = s.event
+        lines.append(f"- **{ev.event_name}** ({ev.date})")
+        lines.append(f"  - Venue: {ev.venue_name} ({'Outdoor' if ev.is_outdoor else 'Indoor'})")
+        lines.append(f"  - Score: {s.relevance_score:.1f}")
+        lines.append(f"  - Reason: {s.score_reason}")
+        lines.append("")
+    return "\n".join(lines)
 def _build_event_summary(event: EventResult, weather: Optional[DailyForecast]) -> str:
     price_str = (
         f"${event.price_min:.0f}-${event.price_max:.0f}"
@@ -34,6 +44,29 @@ def _build_event_summary(event: EventResult, weather: Optional[DailyForecast]) -
         f"Price: {price_str}\n"
         f"Weather: {weather_str}"
     )
+
+
+def _parse_scores_json(raw: str) -> list[dict]:
+    """Robustly parse the LLM's JSON array, handling common Gemini quirks."""
+    # Strip markdown code fences
+    raw = re.sub(r"^```(?:json)?\s*", "", raw.strip())
+    raw = re.sub(r"\s*```$", "", raw).strip()
+
+    # Extract the JSON array — find first '[' and last ']'
+    start = raw.find("[")
+    end   = raw.rfind("]")
+    if start != -1 and end != -1 and end > start:
+        raw = raw[start:end + 1]
+    elif start != -1:
+        # Truncated response — close off any open object and the array
+        raw = raw[start:]
+        raw = re.sub(r",\s*\{[^}]*$", "", raw)  # drop incomplete last object
+        raw = raw.rstrip(", \n") + "]"
+
+    # Remove trailing commas before ] or }  (common Gemini output)
+    raw = re.sub(r",\s*([}\]])", r"\1", raw)
+
+    return json.loads(raw)
 
 
 def run_recommendation_agent(
@@ -67,39 +100,42 @@ def run_recommendation_agent(
         "You are an expert event recommendation engine for EventScout. "
         "Your job is to score how well each event matches what the user is looking for.\n\n"
 
-        "SCORING FACTORS:\n"
-        "1. Semantic match between user's request and event name/description/genre (most important)\n"
+        "SCORING FACTORS (in order of importance):\n"
+        "1. Semantic match between user's request and event name/description/genre — this is by far the most important factor\n"
         "2. Price fit within budget\n"
-        "3. Weather suitability — if the user mentions outdoor preference in their vibe notes "
-        "and the event is outdoor with bad weather, apply a gentle penalty (-5 to -10). "
-        "Do NOT over-penalise — event quality and relevance matter more than weather.\n"
-        "4. Timing (weekday vs weekend)\n\n"
+        "3. Timing (weekday vs weekend)\n"
+        "4. Venue type (indoor/outdoor) — minor factor only, max -5 points even if user prefers outdoor\n\n"
 
         "VENUE/WEATHER GUIDANCE:\n"
-        "- If the user mentions 'outdoor' in their vibe and the event is outdoor with bad weather, "
-        "note it in the reason and subtract up to 10 points.\n"
-        "- If no indoor/outdoor preference is mentioned, ignore venue type in scoring.\n"
-        "- Never let weather alone dominate the score — a great matching event with rain is still "
-        "better than a poor-matching event with sunshine.\n\n"
+        "- Venue type (indoor vs outdoor) is a MINOR preference, not a requirement. "
+        "Never subtract more than 5 points for a venue type mismatch.\n"
+        "- A highly relevant indoor event should still score 80+ even if the user mentioned outdoor vibes.\n"
+        "- Only apply a weather penalty (-5 to -10) if the event is outdoor AND the forecast is clearly bad (heavy rain, storm).\n"
+        "- Never let venue type or weather alone dominate the score.\n\n"
 
         "SCORING EXAMPLES:\n\n"
 
         "EXAMPLE 1 — Perfect match:\n"
         "User wants: 'jazz music weekend', Vibe: 'chill date night'\n"
         "Event: 'Birdland Jazz Club - Friday Night Jazz' | Music/Jazz | Indoor | Friday\n"
-        "Score: 92 | Reason: Jazz genre matches exactly, chill indoor venue fits date night vibe.\n\n"
+        "Score: 92 | Reason: Jazz genre matches exactly, chill indoor venue suits date night vibe.\n\n"
 
-        "EXAMPLE 2 — Wrong category:\n"
+        "EXAMPLE 2 — Good match, minor venue mismatch:\n"
+        "User wants: 'live rock concert', Vibe: 'outdoor vibes'\n"
+        "Event: 'Beauty School Dropout' | Music/Rock | Indoor | Saturday\n"
+        "Score: 82 | Reason: Rock concert matches the request well; indoor venue is a slight mismatch with outdoor preference (-5).\n\n"
+
+        "EXAMPLE 3 — Wrong category:\n"
         "User wants: 'jazz music', Vibe: 'casual'\n"
         "Event: 'Yankees vs Red Sox' | Sports | Outdoor | Saturday\n"
         "Score: 8 | Reason: Sports event completely unrelated to jazz music request.\n\n"
 
-        "EXAMPLE 3 — Outdoor vibe + bad weather (gentle penalty):\n"
+        "EXAMPLE 4 — Outdoor event + bad weather (gentle penalty):\n"
         "User wants: 'outdoor festival', Vibe: 'outdoor vibes'\n"
         "Event: 'Summer Music Festival' | Music | Outdoor | Saturday | Weather: Heavy rain, outdoor_ok=False\n"
         "Score: 62 | Reason: Festival matches request well but heavy rain is a concern for outdoor attendance (-8).\n\n"
 
-        "EXAMPLE 4 — Budget mismatch:\n"
+        "EXAMPLE 5 — Budget mismatch:\n"
         "User wants: 'live music', Budget: $30\n"
         "Event: 'Coldplay World Tour' | Music/Rock | Indoor | Saturday | Price: $150-$300\n"
         "Score: 20 | Reason: Music matches but price ($150-$300) far exceeds $30 budget.\n\n"
@@ -136,10 +172,8 @@ def run_recommendation_agent(
             temperature = 0.2,
             max_tokens  = 8000,
         )
-        raw_json    = response.choices[0].message.content.strip()
-        raw_json    = re.sub(r"^```(?:json)?\s*", "", raw_json)
-        raw_json    = re.sub(r"\s*```$", "", raw_json).strip()
-        scores_list = json.loads(raw_json)
+        raw_json = response.choices[0].message.content.strip()
+        scores_list = _parse_scores_json(raw_json)
 
     except Exception as exc:
         import traceback
@@ -154,7 +188,7 @@ def run_recommendation_agent(
             )
             for e in candidate_events
         ]
-        return RecommendationAgentOutput(request=request, recommendations=scored[:top_n])
+        return RecommendationAgentOutput(request=request, recommendations=scored[:top_n], formatted_output="")
 
     event_lookup = {e.event_id: e for e in candidate_events}
     scores_map   = {item["event_id"]: item for item in scores_list}
