@@ -1,0 +1,70 @@
+EventScout Evaluation Results
+Run date: 2026-03-02
+60/60 tests passed (0 failed)
+
+Golden: 10/10
+  ✅ PASS | Golden 1: Jazz request → Music/Jazz category in top result
+  ✅ PASS | Golden 2: Budget $30 cap respected across all results
+  ✅ PASS | Golden 3: Weekend preference → top results are weekend events
+  ✅ PASS | Golden 4: Indoor preference → top result is indoor
+  ✅ PASS | Golden 5: LA search returns LA events only
+  ✅ PASS | Golden 6: Top result has all required fields populated
+  ✅ PASS | Golden 7: Weather data attached to recommendations
+  ✅ PASS | Golden 8: Sports request → sports events score well
+  ✅ PASS | Golden 9: QA multi-turn history grows correctly
+  ✅ PASS | Golden 10: Results are sorted by score descending
+Adversarial: 10/10
+  ✅ PASS | Adversarial 1: Vague 'something fun' — should not crash
+  ✅ PASS | Adversarial 2: Budget = $0 — free events only
+  ✅ PASS | Adversarial 3: Budget $10,000 — no crash, valid results
+  ✅ PASS | Adversarial 4: Outdoor request in rainy Seattle
+  ✅ PASS | Adversarial 5: Single day range (start = end)
+  ✅ PASS | Adversarial 6: Contradictory/overloaded description — no crash
+  ✅ PASS | Adversarial 7: Special characters in description — no crash
+  ✅ PASS | Adversarial 8: Short 2-day window — handles low event count
+  ✅ PASS | Adversarial 9: Non-English description (French) — no crash
+  ✅ PASS | Adversarial 10: Nonsense description — returns results without crash
+Negative: 10/10
+  ✅ PASS | Negative 1: Jazz request → sports events score < 50
+  ✅ PASS | Negative 2: $20 budget → expensive events not in top 3
+  ✅ PASS | Negative 3: Indoor request → outdoor events not dominating top 3
+  ✅ PASS | Negative 4: Classical request → Hip-Hop genre scores low
+  ✅ PASS | Negative 5: Family request → non-family events don't top the list
+  ✅ PASS | Negative 6: Weekday request → weekend events not in top results
+  ✅ PASS | Negative 7: Jazz request → non-music events score below 65
+  ✅ PASS | Negative 8: $15 budget → no events > $30 in top 3
+  ✅ PASS | Negative 9: Niche non-existent request → avg score < 70
+  ✅ PASS | Negative 10: QA with off-topic question — answers without crashing
+Regression: 10/10
+  ✅ PASS | Regression 1: Weather agent returns 7 days for 7-day window
+  ✅ PASS | Regression 2: Events agent returns events with valid fields
+  ✅ PASS | Regression 3: is_outdoor flag correct for known venue types
+  ✅ PASS | Regression 4: is_weekend flag correct (Sat=True, Mon=False)
+  ✅ PASS | Regression 5: Parallel fetch of events + weather succeeds
+  ✅ PASS | Regression 6: Recommendation agent returns exactly top_n results
+  ✅ PASS | Regression 7: QA single-turn returns answer + 2-message history
+  ✅ PASS | Regression 8: Weather forecast dates match requested range exactly
+  ✅ PASS | Regression 9: Events with no price default to 0.0 not None
+  ✅ PASS | Regression 10: QA 3-turn history accumulates to 6 messages
+MaaJ Golden: 10/10
+  ✅ PASS | MaaJ Golden MG-1
+  ✅ PASS | MaaJ Golden MG-2
+  ✅ PASS | MaaJ Golden MG-3
+  ✅ PASS | MaaJ Golden MG-4
+  ✅ PASS | MaaJ Golden MG-5
+  ✅ PASS | MaaJ Golden MG-6
+  ✅ PASS | MaaJ Golden MG-7
+  ✅ PASS | MaaJ Golden MG-8
+  ✅ PASS | MaaJ Golden MG-9
+  ✅ PASS | MaaJ Golden MG-10
+MaaJ Rubric: 10/10
+  ✅ PASS | MaaJ Rubric MR-1
+  ✅ PASS | MaaJ Rubric MR-2
+  ✅ PASS | MaaJ Rubric MR-3
+  ✅ PASS | MaaJ Rubric MR-4
+  ✅ PASS | MaaJ Rubric MR-5
+  ✅ PASS | MaaJ Rubric MR-6
+  ✅ PASS | MaaJ Rubric MR-7
+  ✅ PASS | MaaJ Rubric MR-8
+  ✅ PASS | MaaJ Rubric MR-9
+  ✅ PASS | MaaJ Rubric MR-10
