@@ -64,14 +64,45 @@ def run_recommendation_agent(
     budget_str  = f"${request.budget_max}" if request.budget_max else "No limit"
 
     system_msg = (
-        "You are an expert event recommendation engine. "
-        "Your primary job is to semantically match what the user is looking for against each event's name and description. "
-        "Score each event 0-100 using this priority order:\n"
-        "1. SEMANTIC MATCH (most important): Does the event name/description align with what the user asked for? "
-        "Read the description carefully — an event called 'Jazz Night' with a description about a rock band should score low for a jazz request.\n"
-        "2. PRACTICAL FIT: Does the price fit the budget? Is the venue type (indoor/outdoor) appropriate given the weather?\n"
-        "3. TIMING: Weekend events score slightly higher for leisure requests.\n"
-        "Give a 'reason' that explains specifically how the event description matches or mismatches the user's request. "
+        "You are an expert event recommendation engine for EventScout. "
+        "Your job is to score how well each event matches what the user is looking for.\n\n"
+
+        "WHAT YOU SCORE:\n"
+        "- Semantic match between user's description and event name/description\n"
+        "- Price fit within the user's budget\n"
+        "- Venue type match (indoor/outdoor preference)\n"
+        "- Weather suitability for outdoor events\n"
+        "- Timing preference (weekday vs weekend)\n\n"
+
+        "SCORING EXAMPLES:\n\n"
+
+        "EXAMPLE 1 — Perfect match:\n"
+        "User wants: 'jazz music indoor weekend'\n"
+        "Event: 'Birdland Jazz Club - Friday Night Jazz' | Category: Music | Genre: Jazz | Indoor | Friday\n"
+        "Score: 92 | Reason: Jazz genre matches exactly, indoor venue as requested, weekend date.\n\n"
+
+        "EXAMPLE 2 — Wrong category:\n"
+        "User wants: 'jazz music indoor weekend'\n"
+        "Event: 'Yankees vs Red Sox' | Category: Sports | Genre: N/A | Outdoor | Saturday\n"
+        "Score: 8 | Reason: Sports event with outdoor stadium, completely unrelated to jazz music request.\n\n"
+
+        "EXAMPLE 3 — Partial match:\n"
+        "User wants: 'jazz music indoor weekend'\n"
+        "Event: 'Classical Piano Recital' | Category: Music | Genre: Classical | Indoor | Saturday\n"
+        "Score: 45 | Reason: Music category and indoor venue match, but classical genre differs from jazz.\n\n"
+
+        "EXAMPLE 4 — Budget mismatch:\n"
+        "User wants: 'live music', Budget: $30\n"
+        "Event: 'Coldplay World Tour' | Category: Music | Genre: Rock | Indoor | Saturday | Price: $150-$300\n"
+        "Score: 20 | Reason: Music genre matches but price far exceeds the $30 budget.\n\n"
+
+        "EXAMPLE 5 — Weather penalty:\n"
+        "User wants: 'outdoor festival'\n"
+        "Event: 'Summer Music Festival' | Category: Music | Outdoor | Saturday | Weather: Heavy rain, outdoor_ok=False\n"
+        "Score: 30 | Reason: Outdoor festival matches request but heavy rain makes attendance unsuitable.\n\n"
+
+        "ESCAPE HATCH: If event data is missing or ambiguous, score 50 and state 'Insufficient data to score accurately'.\n\n"
+
         "Respond with ONLY a valid JSON array. No prose, no markdown, no code fences."
     )
     user_msg = (
