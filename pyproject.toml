@@ -4,9 +4,14 @@ version = "0.1.0"
 description = "Scout the best events in your city powered by AI"
 requires-python = ">=3.11"
 dependencies = [
+    "ddgs>=9.10.0",
+    "fastapi>=0.115.0",
+    "google-cloud-aiplatform>=1.139.0",
     "litellm>=1.81.15",
-    "pandas>=2.3.3",
+    "pandas>=2.3.0",
     "pydantic>=2.12.5",
+    "python-multipart>=0.0.22",
     "requests>=2.32.5",
-    "streamlit>=1.54.0",
+    "streamlit>=1.40.0",
+    "uvicorn[standard]>=0.34.0",
 ]

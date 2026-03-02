@@ -67,53 +67,63 @@ def run_recommendation_agent(
         "You are an expert event recommendation engine for EventScout. "
         "Your job is to score how well each event matches what the user is looking for.\n\n"
 
-        "WHAT YOU SCORE:\n"
-        "- Semantic match between user's description and event name/description\n"
-        "- Price fit within the user's budget\n"
-        "- Venue type match (indoor/outdoor preference)\n"
-        "- Weather suitability for outdoor events\n"
-        "- Timing preference (weekday vs weekend)\n\n"
+        "SCORING FACTORS:\n"
+        "1. Semantic match between user's request and event name/description/genre (most important)\n"
+        "2. Price fit within budget\n"
+        "3. Weather suitability — if the user mentions outdoor preference in their vibe notes "
+        "and the event is outdoor with bad weather, apply a gentle penalty (-5 to -10). "
+        "Do NOT over-penalise — event quality and relevance matter more than weather.\n"
+        "4. Timing (weekday vs weekend)\n\n"
+
+        "VENUE/WEATHER GUIDANCE:\n"
+        "- If the user mentions 'outdoor' in their vibe and the event is outdoor with bad weather, "
+        "note it in the reason and subtract up to 10 points.\n"
+        "- If no indoor/outdoor preference is mentioned, ignore venue type in scoring.\n"
+        "- Never let weather alone dominate the score — a great matching event with rain is still "
+        "better than a poor-matching event with sunshine.\n\n"
 
         "SCORING EXAMPLES:\n\n"
 
         "EXAMPLE 1 — Perfect match:\n"
-        "User wants: 'jazz music indoor weekend'\n"
-        "Event: 'Birdland Jazz Club - Friday Night Jazz' | Category: Music | Genre: Jazz | Indoor | Friday\n"
-        "Score: 92 | Reason: Jazz genre matches exactly, indoor venue as requested, weekend date.\n\n"
+        "User wants: 'jazz music weekend', Vibe: 'chill date night'\n"
+        "Event: 'Birdland Jazz Club - Friday Night Jazz' | Music/Jazz | Indoor | Friday\n"
+        "Score: 92 | Reason: Jazz genre matches exactly, chill indoor venue fits date night vibe.\n\n"
 
         "EXAMPLE 2 — Wrong category:\n"
-        "User wants: 'jazz music indoor weekend'\n"
-        "Event: 'Yankees vs Red Sox' | Category: Sports | Genre: N/A | Outdoor | Saturday\n"
-        "Score: 8 | Reason: Sports event with outdoor stadium, completely unrelated to jazz music request.\n\n"
+        "User wants: 'jazz music', Vibe: 'casual'\n"
+        "Event: 'Yankees vs Red Sox' | Sports | Outdoor | Saturday\n"
+        "Score: 8 | Reason: Sports event completely unrelated to jazz music request.\n\n"
 
-        "EXAMPLE 3 — Partial match:\n"
-        "User wants: 'jazz music indoor weekend'\n"
-        "Event: 'Classical Piano Recital' | Category: Music | Genre: Classical | Indoor | Saturday\n"
-        "Score: 45 | Reason: Music category and indoor venue match, but classical genre differs from jazz.\n\n"
+        "EXAMPLE 3 — Outdoor vibe + bad weather (gentle penalty):\n"
+        "User wants: 'outdoor festival', Vibe: 'outdoor vibes'\n"
+        "Event: 'Summer Music Festival' | Music | Outdoor | Saturday | Weather: Heavy rain, outdoor_ok=False\n"
+        "Score: 62 | Reason: Festival matches request well but heavy rain is a concern for outdoor attendance (-8).\n\n"
 
         "EXAMPLE 4 — Budget mismatch:\n"
         "User wants: 'live music', Budget: $30\n"
-        "Event: 'Coldplay World Tour' | Category: Music | Genre: Rock | Indoor | Saturday | Price: $150-$300\n"
-        "Score: 20 | Reason: Music genre matches but price far exceeds the $30 budget.\n\n"
+        "Event: 'Coldplay World Tour' | Music/Rock | Indoor | Saturday | Price: $150-$300\n"
+        "Score: 20 | Reason: Music matches but price ($150-$300) far exceeds $30 budget.\n\n"
 
-        "EXAMPLE 5 — Weather penalty:\n"
-        "User wants: 'outdoor festival'\n"
-        "Event: 'Summer Music Festival' | Category: Music | Outdoor | Saturday | Weather: Heavy rain, outdoor_ok=False\n"
-        "Score: 30 | Reason: Outdoor festival matches request but heavy rain makes attendance unsuitable.\n\n"
-
-        "ESCAPE HATCH: If event data is missing or ambiguous, score 50 and state 'Insufficient data to score accurately'.\n\n"
+        "SCORING GUIDANCE FOR SPARSE DATA:\n"
+        "If an event's description is missing or minimal, score based on its name, category, and genre alone. "
+        "Do NOT default to 50 just because data is sparse — make your best inference. "
+        "Only score 50 when the event is genuinely ambiguous and could plausibly be a partial match.\n\n"
 
         "Respond with ONLY a valid JSON array. No prose, no markdown, no code fences."
     )
+    venue_pref  = request.venue_preference  # "Indoor" / "Outdoor" / "No preference"
+    vibe_str    = request.vibe_notes if request.vibe_notes else "(none)"
     user_msg = (
         f"User is looking for: \"{request.event_description}\"\n"
+        f"Venue preference: {venue_pref}\n"
+        f"Vibe & extra preferences: {vibe_str}\n"
         f"Budget max: {budget_str}\n"
         f"Date range: {request.start_date} to {request.end_date}\n\n"
-        f"Score each of the following {len(candidate_events)} events based on how well they match what the user described. "
-        f"Pay close attention to the Description field of each event.\n\n"
+        f"Score each of the following {len(candidate_events)} events based on how well they match. "
+        f"Apply the WEATHER SCORING RULES strictly based on the venue preference '{venue_pref}'.\n\n"
         f"{events_text}\n\n"
         f"Respond with ONLY this JSON array:\n"
-        f'[{{"event_id": "...", "score": <0-100>, "reason": "one sentence explaining the semantic match"}}, ...]'
+        f'[{{"event_id": "...", "score": <0-100>, "reason": "one sentence explaining score including weather impact if relevant"}}, ...]'
     )
 
     try:
@@ -139,7 +149,7 @@ def run_recommendation_agent(
             ScoredEvent(
                 event           = e,
                 weather         = weather_map.get(e.event_id),
-                relevance_score = 50.0,
+                relevance_score = 0.0,
                 score_reason    = f"Scoring error: {exc}",
             )
             for e in candidate_events

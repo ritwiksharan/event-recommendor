@@ -10,7 +10,10 @@ class UserRequest(BaseModel):
     start_date: date
     end_date: date
     event_description: str = Field(..., description="What kind of event the user wants")
+    venue_preference: str = Field(default="No preference", description="Indoor / Outdoor / No preference")
+    vibe_notes: str = Field(default="", description="Free-text vibe and preference notes from the user")
     budget_max: Optional[float] = None
+    selected_categories: list[str] = Field(default_factory=list, description="UI category labels selected by the user")
 
 
 class EventResult(BaseModel):

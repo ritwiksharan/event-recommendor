@@ -3,6 +3,28 @@ from datetime import datetime
 from config import TICKETMASTER_API_KEY, TICKETMASTER_BASE, OUTDOOR_KEYWORDS
 from models.schemas import UserRequest, EventResult, EventAgentOutput
 
+# Map UI category labels → Ticketmaster classificationName values
+# Ticketmaster segments: Music, Sports, Arts & Theatre, Family, Miscellaneous
+CATEGORY_TO_TM_CLASSIFICATION: dict[str, list[str]] = {
+    "Concerts & Live Music" : ["Music"],
+    "Sports"                : ["Sports"],
+    "Theater & Broadway"    : ["Arts & Theatre"],
+    "Comedy"                : ["Arts & Theatre"],
+    "Arts & Exhibitions"    : ["Arts & Theatre"],
+    "Family & Kids"         : ["Family"],
+    "Festivals & Fairs"     : ["Music", "Arts & Theatre", "Miscellaneous"],
+    "Food & Drink"          : ["Miscellaneous"],
+    "Hip-Hop & R&B"         : ["Music"],
+    "Rock & Alternative"    : ["Music"],
+    "Jazz & Blues"          : ["Music"],
+    "Dance & EDM"           : ["Music"],
+    "Cultural & Community"  : ["Arts & Theatre", "Miscellaneous"],
+    "Outdoor & Adventure"   : ["Sports", "Miscellaneous"],
+}
+
+# Ticketmaster segment names we NEVER want (tech, conferences, etc.)
+EXCLUDED_SEGMENTS = {"Technology", "Conference", "Education", "Other"}
+
 
 def _is_weekend(date_str: str) -> bool:
     try:
@@ -78,6 +100,18 @@ def run_events_agent(request: UserRequest) -> EventAgentOutput:
     """Agent 1 — paginate Ticketmaster and return all matching events."""
     all_raw, page, size = [], 0, 200
 
+    # Build the set of Ticketmaster classificationNames from selected UI categories
+    classification_names: list[str] = []
+    if request.selected_categories:
+        seen: set[str] = set()
+        for cat in request.selected_categories:
+            # Strip the leading emoji + space to match our dict keys
+            label = cat.split(" ", 1)[-1] if " " in cat else cat
+            for tm_name in CATEGORY_TO_TM_CLASSIFICATION.get(label, []):
+                if tm_name not in seen:
+                    seen.add(tm_name)
+                    classification_names.append(tm_name)
+
     params = {
         "apikey"       : TICKETMASTER_API_KEY,
         "city"         : request.city,
@@ -89,6 +123,9 @@ def run_events_agent(request: UserRequest) -> EventAgentOutput:
     }
     if request.state_code: params["stateCode"] = request.state_code
     if request.budget_max: params["priceMax"]  = request.budget_max
+    # Pass classificationName — Ticketmaster accepts comma-separated OR multiple params
+    if classification_names:
+        params["classificationName"] = ",".join(classification_names)
 
     try:
         while True:
@@ -110,6 +147,11 @@ def run_events_agent(request: UserRequest) -> EventAgentOutput:
                 break
 
         events = [_parse_event(e) for e in all_raw]
+        # Post-filter: drop any events whose segment is in the excluded list
+        events = [
+            e for e in events
+            if e.category not in EXCLUDED_SEGMENTS
+        ]
         if request.budget_max is not None and request.budget_max > 0:
             events = [e for e in events if e.price_max <= request.budget_max or e.price_max == 0]
         return EventAgentOutput(request=request, events=events, total_found=len(events))

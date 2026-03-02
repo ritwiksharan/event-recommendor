@@ -28,7 +28,8 @@ if "chat_history" not in st.session_state:
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.title("🔍 EventScout")
-    st.markdown("Powered by **Ticketmaster**, **Open-Meteo** & **Claude AI**")
+
+
     st.divider()
 
     st.subheader("Search Settings")
@@ -48,12 +49,37 @@ with st.sidebar:
     with col4:
         end_date = st.date_input("End Date", value=today + timedelta(days=7))
 
-    event_description = st.text_area(
-        "What are you looking for?",
-        value="fun weekend events, concerts or sports",
-        placeholder="e.g. outdoor jazz festival, family-friendly, under $50",
-        height=80,
+    st.markdown("**What are you looking for?**")
+    EVENT_CATEGORIES = [
+        "🎵 Concerts & Live Music",
+        "🏀 Sports",
+        "🎭 Theater & Broadway",
+        "😂 Comedy",
+        "🎨 Arts & Exhibitions",
+        "👨‍👩‍👧 Family & Kids",
+        "🎉 Festivals & Fairs",
+        "🍷 Food & Drink",
+        "🎤 Hip-Hop & R&B",
+        "🎸 Rock & Alternative",
+        "🎷 Jazz & Blues",
+        "💃 Dance & EDM",
+        "🏛️ Cultural & Community",
+        "🌿 Outdoor & Adventure",
+    ]
+    selected_categories = st.multiselect(
+        "Categories (pick one or more)",
+        options=EVENT_CATEGORIES,
+        default=["🎵 Concerts & Live Music", "🏀 Sports"],
+        placeholder="Choose categories...",
     )
+
+    vibe_notes = st.text_area(
+        "✏️ Vibe & preferences *",
+        placeholder="e.g. date night, outdoor vibes, family-friendly, high energy, chill atmosphere…",
+        height=75,
+        help="Required — describe the atmosphere, indoor/outdoor preference, or anything else.",
+    )
+    venue_preference_clean = "No preference"  # inferred from vibe_notes by the LLM
 
     budget_max = st.number_input(
         "Max Budget ($)", min_value=0.0, value=0.0, step=10.0,
@@ -76,6 +102,9 @@ if search_btn:
     if start_date > end_date:
         st.error("Start date must be before end date.")
         st.stop()
+    if not vibe_notes.strip():
+        st.error("Please fill in your vibe & preferences field before searching.")
+        st.stop()
 
     # Reset state on new search
     st.session_state.chat_history     = []
@@ -88,8 +117,15 @@ if search_btn:
         country_code      = country_code.strip() or "US",
         start_date        = start_date,
         end_date          = end_date,
-        event_description = event_description.strip(),
-        budget_max        = budget_max if budget_max > 0 else None,
+        event_description = (
+            ", ".join(c.split(" ", 1)[-1] for c in selected_categories)
+            + (". " + vibe_notes.strip())
+        ) or "any events",
+        venue_preference    = venue_preference_clean,
+        vibe_notes          = vibe_notes.strip(),
+        budget_max          = budget_max if budget_max > 0 else None,
+        selected_categories = selected_categories,
+
     )
 
     status = st.status("Running pipeline...", expanded=True)
@@ -238,12 +274,148 @@ if st.session_state.recommendations:
         st.session_state.chat_history = qa_resp.updated_history
 
 else:
-    # Empty state
-    st.info("Configure your search in the sidebar and click **Find Events** to get started.", icon="👈")
     st.markdown("""
-    ### How it works
-    1. **Agent 1** fetches events from Ticketmaster API
-    2. **Agent 2** fetches weather forecasts from Open-Meteo (free, no key needed)
-    3. **Agent 3** uses Claude to score & rank events based on your preferences
-    4. **Agent 4** answers your follow-up questions via AI chat
-    """)
+<style>
+.hero-wrap {
+    text-align: center;
+    padding: 3rem 1rem 2rem;
+}
+.hero-title {
+    font-size: 3.2rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1.15;
+    margin-bottom: 0.6rem;
+}
+.hero-sub {
+    font-size: 1.2rem;
+    color: #94a3b8;
+    max-width: 600px;
+    margin: 0 auto 2.5rem;
+    line-height: 1.7;
+}
+.feature-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.2rem;
+    max-width: 860px;
+    margin: 0 auto 3rem;
+}
+.feature-card {
+    background: linear-gradient(145deg, #1e1b4b22, #1e1b4b44);
+    border: 1px solid #6366f133;
+    border-radius: 16px;
+    padding: 1.4rem 1.2rem;
+    transition: transform 0.2s, border-color 0.2s;
+}
+.feature-card:hover {
+    transform: translateY(-4px);
+    border-color: #a855f766;
+}
+.feature-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+.feature-title { font-size: 1rem; font-weight: 700; color: #e2e8f0; margin-bottom: 0.3rem; }
+.feature-desc { font-size: 0.85rem; color: #94a3b8; line-height: 1.5; }
+
+.steps-wrap {
+    max-width: 680px;
+    margin: 0 auto 2rem;
+    text-align: left;
+}
+.steps-title {
+    text-align: center;
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: #e2e8f0;
+    margin-bottom: 1.2rem;
+}
+.step-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+.step-num {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6366f1, #a855f7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: white;
+}
+.step-text { font-size: 0.95rem; color: #cbd5e1; line-height: 1.5; padding-top: 4px; }
+.step-text strong { color: #e2e8f0; }
+
+.cta-hint {
+    display: inline-block;
+    background: linear-gradient(135deg, #6366f1, #a855f7);
+    color: white;
+    font-size: 0.95rem;
+    font-weight: 600;
+    padding: 0.65rem 1.8rem;
+    border-radius: 999px;
+    margin-top: 0.5rem;
+    letter-spacing: 0.02em;
+}
+</style>
+
+<div class="hero-wrap">
+  <div class="hero-title">Discover Events<br>Made for You</div>
+  <div class="hero-sub">
+    Tell us your city, your vibe, and your budget —<br>
+    EventScout finds and ranks the best live events happening near you,<br>scored by AI to match exactly what you&apos;re in the mood for.
+  </div>
+
+  <div class="feature-grid">
+    <div class="feature-card">
+      <div class="feature-icon">🎯</div>
+      <div class="feature-title">Personalised Rankings</div>
+      <div class="feature-desc">Every event scored against your taste, vibe, and budget — not generic popularity.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🌤️</div>
+      <div class="feature-title">Weather-Aware</div>
+      <div class="feature-desc">Live forecasts baked into your results so outdoor events are ranked based on real conditions.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">💬</div>
+      <div class="feature-title">Ask Anything</div>
+      <div class="feature-desc">Chat with AI about your results — directions, ticket prices, which to pick, what to wear.</div>
+    </div>
+  </div>
+
+  <div class="steps-wrap">
+    <div class="steps-title">How to get started</div>
+    <div class="step-row">
+      <div class="step-num">1</div>
+      <div class="step-text"><strong>Set your city & dates</strong> in the sidebar on the left</div>
+    </div>
+    <div class="step-row">
+      <div class="step-num">2</div>
+      <div class="step-text"><strong>Pick your event categories</strong> — concerts, sports, theater, comedy &amp; more</div>
+    </div>
+    <div class="step-row">
+      <div class="step-num">3</div>
+      <div class="step-text"><strong>Describe your vibe</strong> — e.g. <em>"date night, something lively, under $80"</em></div>
+    </div>
+    <div class="step-row">
+      <div class="step-num">4</div>
+      <div class="step-text"><strong>Hit Find Events</strong> and get your AI-ranked shortlist with reasons</div>
+    </div>
+    <div class="step-row">
+      <div class="step-num">5</div>
+      <div class="step-text"><strong>Ask follow-up questions</strong> in the chat — we&apos;ll help you decide</div>
+    </div>
+  </div>
+
+  <span class="cta-hint">👈 Start by filling in the sidebar</span>
+</div>
+""", unsafe_allow_html=True)
+

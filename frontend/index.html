@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EventScout — AI-Powered Event Recommendations</title>
+  <meta name="description" content="Discover the best events in your city, ranked by AI to match your vibe, budget and the weather." />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+<!-- ═══ SIDEBAR ═══════════════════════════════════════════════════════════ -->
+<aside id="sidebar">
+  <div class="sidebar-logo">🔍 EventScout</div>
+  <hr class="sidebar-divider" />
+
+  <!-- Location -->
+  <div>
+    <label>City</label>
+    <input type="text" id="city" value="New York" placeholder="e.g. Los Angeles" />
+  </div>
+  <div class="row2">
+    <div>
+      <label>State</label>
+      <input type="text" id="state" value="NY" maxlength="2" placeholder="NY" />
+    </div>
+    <div>
+      <label>Country</label>
+      <input type="text" id="country" value="US" maxlength="2" placeholder="US" />
+    </div>
+  </div>
+
+  <!-- Dates -->
+  <div class="row2">
+    <div>
+      <label>Start Date</label>
+      <input type="date" id="start-date" />
+    </div>
+    <div>
+      <label>End Date</label>
+      <input type="date" id="end-date" />
+    </div>
+  </div>
+
+  <!-- Categories -->
+  <div>
+    <label>What are you looking for?</label>
+    <div class="chips-wrap" id="chips"></div>
+  </div>
+
+  <!-- Vibe -->
+  <div>
+    <label>✏️ Vibe &amp; preferences <span style="color:#ef4444">*</span></label>
+    <textarea id="vibe" placeholder="e.g. date night, outdoor vibes, family-friendly, high energy…"></textarea>
+    <small style="color:var(--muted);font-size:0.73rem;">Required — describe the atmosphere or any extra preferences.</small>
+  </div>
+
+  <!-- Budget -->
+  <div>
+    <label>Max Budget ($) <span id="budget-display" style="color:var(--text);font-weight:700">Any</span></label>
+    <input type="range" id="budget" min="0" max="500" step="10" value="0" />
+  </div>
+
+  <!-- Top N -->
+  <div>
+    <label>Results to show: <span id="topn-display" style="color:var(--text);font-weight:700">6</span></label>
+    <input type="range" id="topn" min="3" max="10" step="1" value="6" />
+  </div>
+
+  <button id="search-btn" onclick="search()">🔍 Find Events</button>
+  <div class="error-box" id="sidebar-error"></div>
+</aside>
+
+<!-- ═══ MAIN ══════════════════════════════════════════════════════════════ -->
+<main id="main">
+
+  <!-- Hero -->
+  <section id="hero">
+    <div class="hero-title">Discover Events<br>Made for You</div>
+    <div class="hero-sub">
+      Tell us your city, vibe, and budget —<br>
+      EventScout finds and ranks the best live events near you,<br>
+      scored by AI to match exactly what you're in the mood for.
+    </div>
+
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-icon">🎯</div>
+        <div class="feature-title">Personalised Rankings</div>
+        <div class="feature-desc">Every event scored against your taste, vibe, and budget — not generic popularity.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🌤️</div>
+        <div class="feature-title">Weather-Aware</div>
+        <div class="feature-desc">Live forecasts baked in so outdoor events are ranked on real conditions.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">💬</div>
+        <div class="feature-title">Ask Anything</div>
+        <div class="feature-desc">Chat with AI about results — directions, prices, which to pick, what to wear.</div>
+      </div>
+    </div>
+
+    <div class="steps-wrap">
+      <div class="steps-heading">How to get started</div>
+      <div class="step-row"><div class="step-num">1</div><div class="step-text"><strong>Set your city &amp; dates</strong> in the sidebar</div></div>
+      <div class="step-row"><div class="step-num">2</div><div class="step-text"><strong>Pick your event categories</strong> — concerts, sports, comedy &amp; more</div></div>
+      <div class="step-row"><div class="step-num">3</div><div class="step-text"><strong>Describe your vibe</strong> — e.g. <em>"date night, something lively, under $80"</em></div></div>
+      <div class="step-row"><div class="step-num">4</div><div class="step-text"><strong>Hit Find Events</strong> for your AI-ranked shortlist</div></div>
+      <div class="step-row"><div class="step-num">5</div><div class="step-text"><strong>Ask follow-up questions</strong> in the chat below</div></div>
+    </div>
+  </section>
+
+  <!-- Loading -->
+  <section id="loading">
+    <div class="spinner"></div>
+    <div class="loading-text" id="loading-text">Fetching events &amp; weather…</div>
+  </section>
+
+  <!-- Results -->
+  <section id="results">
+    <div class="stats-bar" id="stats-bar"></div>
+    <div class="results-title" id="results-title"></div>
+    <div id="cards-container"></div>
+
+    <!-- Chat -->
+    <div id="chat-section">
+      <div class="chat-heading">💬 Ask About These Events</div>
+      <div class="chat-subhead">Ask anything — prices, directions, weather, which to pick, ticket links…</div>
+      <div id="chat-messages"></div>
+      <div class="chat-input-row">
+        <input type="text" id="chat-input" placeholder="e.g. Which events are best for families?" onkeydown="if(event.key==='Enter')sendChat()" />
+        <button id="chat-send" onclick="sendChat()">Send</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
