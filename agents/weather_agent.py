@@ -1,6 +1,9 @@
 import requests
+from datetime import date, timedelta
 from config import WMO_CODES, BAD_CODES
 from models.schemas import UserRequest, DailyForecast, WeatherAgentOutput
+
+FORECAST_LIMIT_DAYS = 16
 
 
 def _geocode(city: str) -> tuple[float, float]:
@@ -29,6 +32,10 @@ def run_weather_agent(request: UserRequest) -> WeatherAgentOutput:
     try:
         lat, lon = _geocode(request.city)
 
+        # Open-Meteo only provides 16 days ahead — cap end_date to avoid silent errors
+        max_end = date.today() + timedelta(days=FORECAST_LIMIT_DAYS)
+        end_date = min(request.end_date, max_end)
+
         resp = requests.get(
             "https://api.open-meteo.com/v1/forecast",
             params={
@@ -42,7 +49,7 @@ def run_weather_agent(request: UserRequest) -> WeatherAgentOutput:
                     "windspeed_10m_max",
                 ],
                 "start_date"      : request.start_date.isoformat(),
-                "end_date"        : request.end_date.isoformat(),
+                "end_date"        : end_date.isoformat(),
                 "timezone"        : "auto",
                 "temperature_unit": "celsius",
                 "windspeed_unit"  : "kmh",
@@ -50,7 +57,10 @@ def run_weather_agent(request: UserRequest) -> WeatherAgentOutput:
             timeout=10,
         )
         resp.raise_for_status()
-        d = resp.json()["daily"]
+        body = resp.json()
+        if body.get("error"):
+            raise ValueError(body.get("reason", "Open-Meteo error"))
+        d = body["daily"]
 
         forecasts = {}
         for i, dt in enumerate(d["time"]):
