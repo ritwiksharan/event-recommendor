@@ -2,6 +2,8 @@
 
 > AI-powered event discovery — find the best events in your city, scored by a language model and matched with live weather forecasts.
 
+**Live:** https://eventscout-521105577151.us-central1.run.app
+
 EventScout uses a **4-agent pipeline** to fetch events from Ticketmaster, pull live weather forecasts, rank everything with an LLM, and answer follow-up questions through a built-in chat interface. The entire app — API and frontend — is served from a single **FastAPI** server.
 
 ---
