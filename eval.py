@@ -700,7 +700,254 @@ def run_regression_tests() -> None:
     }, extra_agents_result=None)
     pause()
 
+# ════════════════════════════════════════════════════════════════════════════════
+# 5. MaaJ GOLDEN REFERENCE EVALS
+#    LLM judge compares actual QA answer against an expected reference answer.
+#    Tests whether the agent gives factually correct, relevant answers.
+# ════════════════════════════════════════════════════════════════════════════════
 
+def llm_judge(question: str, actual: str, expected: str = "", rubric: str = "") -> dict:
+    """Call Gemini as a judge to evaluate an answer. Returns score 1-5 and reason."""
+    from litellm import completion
+    from config import CLAUDE_MODEL
+
+    if expected:
+        prompt = f"""You are an impartial judge evaluating a chatbot answer.
+
+Question asked: {question}
+Expected answer (reference): {expected}
+Actual answer given: {actual}
+
+Score the actual answer from 1-5:
+5 = Fully correct, matches expected, specific and helpful
+4 = Mostly correct, minor omissions
+3 = Partially correct, missing key info
+2 = Mostly wrong or vague
+1 = Completely wrong or refused incorrectly
+
+Respond ONLY as JSON: {{"score": <1-5>, "reason": "one sentence"}}"""
+
+    else:
+        prompt = f"""You are an impartial judge evaluating a chatbot answer.
+
+Question asked: {question}
+Rubric: {rubric}
+Actual answer given: {actual}
+
+Score the actual answer from 1-5 based on the rubric.
+5 = Exceeds rubric criteria
+4 = Meets all rubric criteria  
+3 = Meets most rubric criteria
+2 = Meets some rubric criteria
+1 = Fails rubric criteria
+
+Respond ONLY as JSON: {{"score": <1-5>, "reason": "one sentence"}}"""
+
+    try:
+        resp = completion(
+            model=CLAUDE_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=200,
+            temperature=0.0,
+        )
+        import json, re
+        raw = resp.choices[0].message.content.strip()
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw).strip()
+        return json.loads(raw)
+    except Exception as e:
+        return {"score": 0, "reason": f"Judge error: {e}"}
+
+
+def run_maaj_golden_tests() -> None:
+    print("\n" + "=" * 65)
+    print("5️⃣  MaaJ GOLDEN REFERENCE EVALS  (judge vs expected answer)")
+    print("=" * 65)
+
+    # Get shared recommendations once for all QA tests
+    recs = run_pipeline("New York", date(2026, 3, 1), date(2026, 3, 7),
+                        "jazz music indoor weekend", budget=100.0, state_code="NY", top_n=5)
+    pause()
+
+    maaj_golden_cases = [
+        {
+            "id": "MG-1",
+            "question": "What is the top recommended event?",
+            "expected": "Should name a specific event, include the venue name and date",
+        },
+        {
+            "id": "MG-2",
+            "question": "What is the cheapest event in the recommendations?",
+            "expected": "Should mention a specific price or say free/unknown, and name the event",
+        },
+        {
+            "id": "MG-3",
+            "question": "Which events are happening on the weekend?",
+            "expected": "Should list events occurring on Friday, Saturday or Sunday",
+        },
+        {
+            "id": "MG-4",
+            "question": "Are any of the recommended events outdoors?",
+            "expected": "Should clearly state yes or no, and name specific outdoor or indoor venues",
+        },
+        {
+            "id": "MG-5",
+            "question": "How do I get tickets for the top event?",
+            "expected": "Should provide a ticket URL or link for the top recommended event",
+        },
+        {
+            "id": "MG-6",
+            "question": "What genre of music is the top event?",
+            "expected": "Should mention jazz or the specific genre of the top recommendation",
+        },
+        {
+            "id": "MG-7",
+            "question": "What time does the first event start?",
+            "expected": "Should mention a specific time like 7:00 PM or 19:00, or say TBD",
+        },
+        {
+            "id": "MG-8",
+            "question": "Which event has the highest score?",
+            "expected": "Should name the event with the highest relevance score and mention the score",
+        },
+        {
+            "id": "MG-9",
+            "question": "What is the weather like for the top event?",
+            "expected": "Should mention temperature, rain chance, or weather description for that date",
+        },
+        {
+            "id": "MG-10",
+            "question": "Which events are under $50?",
+            "expected": "Should list events with price under $50 or mention free/unlisted events",
+        },
+    ]
+
+    golden_passed = 0
+    for case in maaj_golden_cases:
+        qa_resp = run_qa_agent(QARequest(
+            recommendations=recs,
+            conversation_history=[],
+            user_question=case["question"],
+        ))
+        judgment = llm_judge(
+            question=case["question"],
+            actual=qa_resp.answer,
+            expected=case["expected"],
+        )
+        score   = judgment.get("score", 0)
+        reason  = judgment.get("reason", "")
+        passed  = score >= 3
+        status  = PASS if passed else FAIL
+        if passed:
+            golden_passed += 1
+
+        results_log.append({"test": f"MaaJ Golden {case['id']}", "status": status,
+                             "passed": [], "failed": []})
+        print(f"\n{status} | MaaJ Golden {case['id']} [Judge score: {score}/5]")
+        print(f"   Q: {case['question']}")
+        print(f"   A: {qa_resp.answer[:120]}...")
+        print(f"   Judge: {reason}")
+        pause(2)
+
+    print(f"\n  MaaJ Golden: {golden_passed}/10 passed")
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# 6. MaaJ RUBRIC EVALS
+#    LLM judge grades the answer against quality rubric criteria.
+#    Tests whether answers are helpful, specific, safe, and well-scoped.
+# ════════════════════════════════════════════════════════════════════════════════
+
+def run_maaj_rubric_tests() -> None:
+    print("\n" + "=" * 65)
+    print("6️⃣  MaaJ RUBRIC EVALS  (judge grades against quality criteria)")
+    print("=" * 65)
+
+    recs = run_pipeline("New York", date(2026, 3, 1), date(2026, 3, 7),
+                        "live music concert any genre", budget=150.0, state_code="NY", top_n=5)
+    pause()
+
+    maaj_rubric_cases = [
+        {
+            "id": "MR-1",
+            "question": "Which event would you recommend for a first date?",
+            "rubric": "Answer should be specific (name an event), give a reason why it suits a date, mention atmosphere or venue vibe",
+        },
+        {
+            "id": "MR-2",
+            "question": "Can you compare the top 2 events for me?",
+            "rubric": "Answer should name both events, compare at least 2 attributes (price, genre, venue, score), be balanced",
+        },
+        {
+            "id": "MR-3",
+            "question": "Is there anything suitable for children?",
+            "rubric": "Answer should address family-friendliness directly, mention specific events if suitable, or honestly say none are clearly family-friendly",
+        },
+        {
+            "id": "MR-4",
+            "question": "What should I wear to the top event?",
+            "rubric": "Answer should give practical advice based on venue type (indoor/outdoor), weather, and event formality. Should not refuse.",
+        },
+        {
+            "id": "MR-5",
+            "question": "I only have 2 hours free on Saturday evening, which event fits?",
+            "rubric": "Answer should check Saturday events, consider event timing, give a specific recommendation with reasoning",
+        },
+        {
+            "id": "MR-6",
+            "question": "Which event is best value for money?",
+            "rubric": "Answer should compare price against score/quality, name a specific event, give a clear recommendation with reasoning",
+        },
+        {
+            "id": "MR-7",
+            "question": "Tell me something interesting about the top venue",
+            "rubric": "Answer should mention the venue name, share relevant details about it, be engaging and informative",
+        },
+        {
+            "id": "MR-8",
+            "question": "What is the capital of France?",
+            "rubric": "This is out of scope. Answer should politely decline to answer unrelated questions and redirect to event-related help",
+        },
+        {
+            "id": "MR-9",
+            "question": "I feel sad and lonely, can you help me?",
+            "rubric": "Answer should be empathetic, not dismissive, and gently redirect toward finding a fun event to attend as a positive suggestion",
+        },
+        {
+            "id": "MR-10",
+            "question": "Give me a detailed summary of all 5 events including every piece of information you have",
+            "rubric": "Answer should be comprehensive but organized, cover all 5 events, include key details like date/venue/price/score for each",
+        },
+    ]
+
+    rubric_passed = 0
+    for case in maaj_rubric_cases:
+        qa_resp = run_qa_agent(QARequest(
+            recommendations=recs,
+            conversation_history=[],
+            user_question=case["question"],
+        ))
+        judgment = llm_judge(
+            question=case["question"],
+            actual=qa_resp.answer,
+            rubric=case["rubric"],
+        )
+        score  = judgment.get("score", 0)
+        reason = judgment.get("reason", "")
+        passed = score >= 3
+        status = PASS if passed else FAIL
+        if passed:
+            rubric_passed += 1
+
+        results_log.append({"test": f"MaaJ Rubric {case['id']}", "status": status,
+                             "passed": [], "failed": []})
+        print(f"\n{status} | MaaJ Rubric {case['id']} [Judge score: {score}/5]")
+        print(f"   Q: {case['question']}")
+        print(f"   A: {qa_resp.answer[:120]}...")
+        print(f"   Judge: {reason}")
+        pause(2)
+
+    print(f"\n  MaaJ Rubric: {rubric_passed}/10 passed")
 # ════════════════════════════════════════════════════════════════════════════════
 # MAIN — Run all test suites and print final report
 # ════════════════════════════════════════════════════════════════════════════════
@@ -708,22 +955,19 @@ def run_regression_tests() -> None:
 def main() -> None:
     print("\n" + "=" * 65)
     print("  EventScout Evaluation Suite")
-    print("  40 tests: 10 Golden · 10 Adversarial · 10 Negative · 10 Regression")
+    print("  60 tests: 10 Golden · 10 Adversarial · 10 Negative · 10 Regression · 10 MaaJ Golden · 10 MaaJ Rubric")
     print("=" * 65)
-
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        print("\n⚠️  ANTHROPIC_API_KEY not set — LLM tests will fail.")
-        print("   export ANTHROPIC_API_KEY='sk-ant-...' and re-run.\n")
 
     try:
         run_golden_tests()
         run_adversarial_tests()
         run_negative_tests()
         run_regression_tests()
+        run_maaj_golden_tests()
+        run_maaj_rubric_tests()
     except KeyboardInterrupt:
         print("\n\n⏹️  Eval interrupted by user.")
 
-    # ── Final report ──────────────────────────────────────────────────────────
     total  = len(results_log)
     passed = sum(1 for r in results_log if r["status"] == PASS)
     failed = total - passed
@@ -734,14 +978,16 @@ def main() -> None:
     print(f"\n  {passed}/{total} tests passed   ({failed} failed)\n")
 
     categories = {
-        "Golden":     [r for r in results_log if "Golden"     in r["test"]],
-        "Adversarial":[r for r in results_log if "Adversarial" in r["test"]],
-        "Negative":   [r for r in results_log if "Negative"   in r["test"]],
-        "Regression": [r for r in results_log if "Regression" in r["test"]],
+        "Golden":      [r for r in results_log if "Golden"      in r["test"] and "MaaJ" not in r["test"]],
+        "Adversarial": [r for r in results_log if "Adversarial" in r["test"]],
+        "Negative":    [r for r in results_log if "Negative"    in r["test"]],
+        "Regression":  [r for r in results_log if "Regression"  in r["test"]],
+        "MaaJ Golden": [r for r in results_log if "MaaJ Golden" in r["test"]],
+        "MaaJ Rubric": [r for r in results_log if "MaaJ Rubric" in r["test"]],
     }
     for cat, tests in categories.items():
         cat_passed = sum(1 for t in tests if t["status"] == PASS)
-        print(f"  {cat:<12} {cat_passed}/{len(tests)}")
+        print(f"  {cat:<14} {cat_passed}/{len(tests)}")
         for t in tests:
             print(f"    {t['status']} | {t['test']}")
 
@@ -754,3 +1000,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
