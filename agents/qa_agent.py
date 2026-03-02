@@ -76,6 +76,10 @@ def run_qa_agent(
         "User: 'I feel lonely tonight'\n"
         "Good answer: 'I'm sorry to hear that! Going to a live event can be a great way to get out and enjoy yourself. Based on your recommendations, [Event Name] tonight might be a perfect pick!'\n\n"
 
+        "EXAMPLE 6 — When data is limited:\n"
+        "User: 'I only have Saturday evening free, what fits?'\n"
+        "Good answer: 'I don't see any Saturday evening events in your current recommendations, but the closest option is [Event Name] on [day] at [time] — would that work for you?'\n\n"
+        
         "ESCAPE HATCH: If you are unsure or the data doesn't contain the answer, say "
         "'I don't have enough information about that in your current recommendations.' "
         "Never make up prices, times, or venue details.\n\n"
