@@ -3,15 +3,15 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:        #060d1f;
-  --surface:   #0e1a38;
-  --surface2:  #162244;
-  --border:    rgba(129,140,248,0.3);
-  --accent1:   #6366f1;
-  --accent2:   #4f46e5;
-  --accent3:   #a5b4fc;
-  --text:      #eef2ff;
-  --muted:     #a5b4fc;
+  --bg:        #0d0618;
+  --surface:   #180c2e;
+  --surface2:  #241042;
+  --border:    rgba(192,132,252,0.28);
+  --accent1:   #a855f7;
+  --accent2:   #7e22ce;
+  --accent3:   #e9d5ff;
+  --text:      #faf5ff;
+  --muted:     #d8b4fe;
   --green:     #34d399;
   --yellow:    #fbbf24;
   --red:       #f87171;
@@ -21,8 +21,8 @@
 body {
   font-family: 'Inter', sans-serif;
   background: var(--bg);
-  background-image: radial-gradient(ellipse at 20% 20%, rgba(99,102,241,0.14) 0%, transparent 60%),
-                    radial-gradient(ellipse at 80% 80%, rgba(79,70,229,0.12) 0%, transparent 60%);
+  background-image: radial-gradient(ellipse at 20% 20%, rgba(168,85,247,0.15) 0%, transparent 60%),
+                    radial-gradient(ellipse at 80% 80%, rgba(126,34,206,0.12) 0%, transparent 60%);
   color: var(--text);
   min-height: 100vh;
   display: flex;
