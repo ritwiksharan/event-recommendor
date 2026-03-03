@@ -8,8 +8,19 @@ EventScout uses a **4-agent pipeline** to fetch events from Ticketmaster, pull l
 
 ---
 
+## Project Goal
+
+The primary goal of EventScout is to build a **well-scoped, in-domain QA bot** grounded in real, live event data.
+
+**The domain** is narrowly defined: live events happening in a specific city, within a user-specified date range and budget. Everything the QA agent knows and answers about is anchored to this context — the actual Ticketmaster listings retrieved for that search, enriched with live weather forecasts and DuckDuckGo web search snippets. Questions about event times, prices, venues, ticket links, directions to listed venues, artists performing, weather suitability, and ticket add-ons are all in-domain. Anything outside this — general knowledge, events in other cities, unrelated topics — is explicitly declined.
+
+The recommendation engine (Agent 3) does a reasonable job of ranking events by relevance, but it is not the primary focus and is not perfect — LLM scoring of heterogeneous Ticketmaster data has inherent noise. **Where EventScout genuinely excels is as a QA bot**: once recommendations are surfaced, the chat interface can accurately answer detailed follow-up questions, handle adversarial inputs gracefully, and enrich answers using live web search — all strictly within the defined domain.
+
+---
+
 ## Table of Contents
 
+- [Project Goal](#project-goal)
 - [Architecture](#architecture)
   - [System Overview](#system-overview)
   - [Request & Data Flow](#request--data-flow)
